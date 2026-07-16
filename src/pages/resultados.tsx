@@ -106,7 +106,7 @@ export function ResultadosPage() {
                           <span className="font-medium text-foreground">
                             {formatNumber(count)}
                           </span>{" "}
-                          respostas ({formatPercent(percentage)})
+                          respostas ({formatPercent(percentage / 100)})
                         </div>
                       </div>
                       <Progress value={percentage} className="h-2" />

@@ -38,9 +38,9 @@ function aggregateSummary(rows: LeadAuditSummaryRow[]) {
 
   return {
     ...totals,
-    contactRate: totals.leads ? (totals.contact / totals.leads) * 100 : 0,
-    icRate: totals.leads ? (totals.ic / totals.leads) * 100 : 0,
-    purchaseRate: totals.leads ? (totals.purchase / totals.leads) * 100 : 0,
+    contactRate: totals.leads ? totals.contact / totals.leads : 0,
+    icRate: totals.leads ? totals.ic / totals.leads : 0,
+    purchaseRate: totals.leads ? totals.purchase / totals.leads : 0,
   }
 }
 

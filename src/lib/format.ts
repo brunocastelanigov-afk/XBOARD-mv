@@ -26,7 +26,7 @@ export function formatNumber(value: number | null | undefined) {
 }
 
 export function formatPercent(value: number | null | undefined) {
-  return `${Number(value ?? 0).toFixed(0)}%`
+  return `${(Number(value ?? 0) * 100).toFixed(0)}%`
 }
 
 export function toIsoDate(date: Date) {

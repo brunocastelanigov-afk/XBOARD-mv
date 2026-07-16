@@ -103,7 +103,7 @@ function aggregateCampaigns(rows: CampaignPerformanceRow[]) {
     .map(([name, row]) => ({
       name,
       leads: row.leads,
-      conversion: row.visitors ? (row.conclusions / row.visitors) * 100 : 0,
+      conversion: row.visitors ? row.conclusions / row.visitors : 0,
     }))
     .sort((a, b) => b.leads - a.leads)
     .slice(0, 8)
@@ -121,7 +121,7 @@ function aggregateDevices(rows: DevicePerformanceRow[]) {
   return Array.from(byDevice.entries()).map(([name, value]) => ({
     name,
     value,
-    percentage: total ? (value / total) * 100 : 0,
+    percentage: total ? value / total : 0,
   }))
 }
 
@@ -165,7 +165,7 @@ export function PerformancePage() {
         )}
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-          <MetricCard title="Score Geral" value={loading ? "..." : formatPercent(weightedAverage(performanceRows, "score"))} />
+          <MetricCard title="Score Geral" value={loading ? "..." : formatPercent(weightedAverage(performanceRows, "score") / 100)} />
           <MetricCard title="Acessos" value={loading ? "..." : formatNumber(sum(performanceRows, "visitors"))} />
           <MetricCard title="Respostas Iniciadas" value={loading ? "..." : formatNumber(sum(performanceRows, "responses_started"))} />
           <MetricCard title="Conclusões" value={loading ? "..." : formatNumber(sum(performanceRows, "conclusions"))} />
