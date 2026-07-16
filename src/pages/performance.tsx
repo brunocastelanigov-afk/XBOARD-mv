@@ -16,12 +16,13 @@ import type {
   DevicePerformanceRow,
   PerformanceRow,
 } from "@/lib/dashboard-types"
-import { formatDuration, formatNumber, formatPercent } from "@/lib/format"
+import { formatDuration, formatNumber, formatPercent, isTestVariant } from "@/lib/format"
 import {
   Bar,
   BarChart,
   CartesianGrid,
   Cell,
+  Legend,
   Line,
   LineChart,
   Pie,
@@ -31,6 +32,12 @@ import {
   XAxis,
   YAxis,
 } from "recharts"
+
+const trafficLegendLabels: Record<string, string> = {
+  visitors: "Acessos",
+  leads: "Leads",
+  conclusions: "Conclusões",
+}
 
 const chartColors = [
   "var(--chart-1)",
@@ -138,9 +145,9 @@ export function PerformancePage() {
       ]),
     [filters]
   )
-  const performanceRows = data?.[0] ?? []
-  const campaignRows = data?.[1] ?? []
-  const deviceRows = data?.[2] ?? []
+  const performanceRows = (data?.[0] ?? []).filter((row) => !isTestVariant(row.funnel_variant))
+  const campaignRows = (data?.[1] ?? []).filter((row) => !isTestVariant(row.funnel_variant))
+  const deviceRows = (data?.[2] ?? []).filter((row) => !isTestVariant(row.funnel_variant))
   const trafficData = buildTrafficData(performanceRows)
   const funnelData = buildFunnelData(performanceRows)
   const campaigns = aggregateCampaigns(campaignRows)
@@ -170,7 +177,11 @@ export function PerformancePage() {
           <MetricCard title="Score Geral" value={loading ? <Skeleton className="h-7 w-16" /> : formatPercent(weightedAverage(performanceRows, "score") / 100)} />
           <MetricCard title="Acessos" value={loading ? <Skeleton className="h-7 w-16" /> : formatNumber(sum(performanceRows, "visitors"))} />
           <MetricCard title="Respostas Iniciadas" value={loading ? <Skeleton className="h-7 w-16" /> : formatNumber(sum(performanceRows, "responses_started"))} />
-          <MetricCard title="Conclusões" value={loading ? <Skeleton className="h-7 w-16" /> : formatNumber(sum(performanceRows, "conclusions"))} />
+          <MetricCard
+            title="Conclusões"
+            hint="Leads que iniciaram o checkout (evento checkout_start) — não significa que compraram."
+            value={loading ? <Skeleton className="h-7 w-16" /> : formatNumber(sum(performanceRows, "conclusions"))}
+          />
           <MetricCard title="Tempo Médio" value={loading ? <Skeleton className="h-7 w-16" /> : formatDuration(averageSeconds)} />
         </div>
 
@@ -186,9 +197,14 @@ export function PerformancePage() {
                     <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
                     <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
                     <Tooltip contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
-                    <Line type="monotone" dataKey="visitors" stroke="var(--muted-foreground)" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="leads" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
-                    <Line type="monotone" dataKey="conclusions" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
+                    <Legend
+                      formatter={(value) => (
+                        <span style={{ color: "var(--muted-foreground)" }}>{trafficLegendLabels[value] ?? value}</span>
+                      )}
+                    />
+                    <Line type="monotone" dataKey="visitors" name="visitors" stroke="var(--muted-foreground)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="leads" name="leads" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="conclusions" name="conclusions" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
                   </LineChart>
                 </ResponsiveContainer>
               )}

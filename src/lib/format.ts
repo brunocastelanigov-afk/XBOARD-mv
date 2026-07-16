@@ -33,6 +33,12 @@ export function toIsoDate(date: Date) {
   return date.toISOString().slice(0, 10)
 }
 
+const TEST_VARIANT_PATTERN = /smoke|codex|root_variant_test/i
+
+export function isTestVariant(variant: string | null | undefined) {
+  return Boolean(variant && TEST_VARIANT_PATTERN.test(variant))
+}
+
 export function lastDaysRange(days: number) {
   const to = new Date()
   const from = new Date()

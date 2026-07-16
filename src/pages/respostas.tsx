@@ -6,11 +6,12 @@ import { Badge } from "@/components/atoms/badge"
 import { CircularProgress } from "@/components/ui/circular-progress"
 import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
+import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import { fetchLeadResponses, fetchStepResults } from "@/lib/dashboard-queries"
 import { Button } from "@/components/atoms/button"
 import { Skeleton } from "@/components/atoms/skeleton"
 import type { LeadResponseRow, LeadStepCell, StepResultRow } from "@/lib/dashboard-types"
-import { formatDateTime, formatPercent } from "@/lib/format"
+import { formatDateTime, formatNumber, formatPercent } from "@/lib/format"
 
 function leadLabel(lead: LeadResponseRow) {
   return lead.lead_name || lead.lead_email || lead.lead_phone || lead.lead_id
@@ -75,7 +76,8 @@ function buildSkeletonRows(columnCount: number, rowCount = 8) {
 const PAGE_SIZE = 100
 
 export function RespostasPage() {
-  const [search, setSearch] = useState("")
+  const [searchInput, setSearchInput] = useState("")
+  const search = useDebouncedValue(searchInput, 300)
   const [page, setPage] = useState(0)
   const { filters } = useDashboardFilters()
   const {
@@ -97,6 +99,7 @@ export function RespostasPage() {
 
   const leads = data?.[0]?.rows ?? []
   const hasMore = data?.[0]?.hasMore ?? false
+  const total = data?.[0]?.total ?? 0
   const steps = useMemo(() => uniqueSteps(data?.[1] ?? []), [data])
 
   const columns: React.ReactNode[] = [
@@ -147,7 +150,7 @@ export function RespostasPage() {
               <button className="rounded-sm bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors">Etapas</button>
             </div>
           </div>
-          <FilterBar search={search} onSearchChange={setSearch} />
+          <FilterBar search={searchInput} onSearchChange={setSearchInput} />
         </div>
 
         <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
@@ -170,7 +173,7 @@ export function RespostasPage() {
           </div>
           <div className="flex items-center justify-between border-t border-border p-3">
             <span className="text-xs text-muted-foreground">
-              Página {page + 1}
+              Página {page + 1} · {loading ? "..." : `${formatNumber(total)} leads no total`}
             </span>
             <div className="flex gap-2">
               <Button

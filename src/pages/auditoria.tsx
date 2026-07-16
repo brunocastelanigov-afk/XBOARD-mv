@@ -10,6 +10,7 @@ import { FilterBar } from "@/components/composites/filter-bar"
 import { LeadsTabBar } from "@/components/composites/leads-tab-bar"
 import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
+import { useDebouncedValue } from "@/hooks/use-debounced-value"
 import { fetchLeadAudit, fetchLeadAuditSummary } from "@/lib/dashboard-queries"
 import type { AuditStatusFilters, LeadAuditSummaryRow } from "@/lib/dashboard-types"
 import { formatDateTime, formatNumber, formatPercent } from "@/lib/format"
@@ -60,7 +61,8 @@ function nextStatus(value: "all" | "yes" | "no") {
 const PAGE_SIZE = 100
 
 export function AuditoriaPage() {
-  const [search, setSearch] = useState("")
+  const [searchInput, setSearchInput] = useState("")
+  const search = useDebouncedValue(searchInput, 300)
   const [statusFilters, setStatusFilters] = useState(defaultStatusFilters)
   const [page, setPage] = useState(0)
   const { filters } = useDashboardFilters()
@@ -80,6 +82,7 @@ export function AuditoriaPage() {
 
   const rows = data?.[0]?.rows ?? []
   const hasMore = data?.[0]?.hasMore ?? false
+  const total = data?.[0]?.total ?? 0
   const summary = useMemo(() => aggregateSummary(data?.[1] ?? []), [data])
 
   function leadUrl(leadId: string) {
@@ -100,10 +103,10 @@ export function AuditoriaPage() {
             <div className="relative w-full md:w-96">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                value={search}
+                value={searchInput}
                 placeholder="Buscar por lead, email ou telefone..."
                 className="pl-9"
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) => setSearchInput(event.target.value)}
               />
             </div>
             <div className="flex flex-wrap gap-2">
@@ -172,7 +175,7 @@ export function AuditoriaPage() {
               Auditoria de Leads
             </h3>
             <Badge variant="outline" className="border-border bg-background text-muted-foreground">
-              {formatNumber(rows.length)} nesta página
+              {loading ? "..." : `${formatNumber(total)} no total`}
             </Badge>
           </div>
           {error && (

@@ -40,6 +40,7 @@ export async function fetchFilterOptions(signal?: AbortSignal) {
 export interface LeadResponsesPage {
   rows: LeadResponseRow[]
   hasMore: boolean
+  total: number
 }
 
 export async function fetchLeadResponses(
@@ -49,20 +50,42 @@ export async function fetchLeadResponses(
   pageSize = 100,
   signal?: AbortSignal
 ): Promise<LeadResponsesPage> {
-  const rows = await readRows<LeadResponseRow>(
-    supabase.rpc("rpc_lead_responses", {
-      ...scopeParams(filters),
-      p_search: search.trim() || null,
-      p_limit: pageSize + 1,
-      p_offset: page * pageSize,
-    }),
-    signal
-  )
+  const searchParam = search.trim() || null
+
+  const [rows, total] = await Promise.all([
+    readRows<LeadResponseRow>(
+      supabase.rpc("rpc_lead_responses", {
+        ...scopeParams(filters),
+        p_search: searchParam,
+        p_limit: pageSize + 1,
+        p_offset: page * pageSize,
+      }),
+      signal
+    ),
+    fetchLeadResponsesCount(filters, searchParam, signal),
+  ])
 
   return {
     rows: rows.slice(0, pageSize),
     hasMore: rows.length > pageSize,
+    total,
   }
+}
+
+async function fetchLeadResponsesCount(
+  filters: DashboardFilters,
+  search: string | null,
+  signal?: AbortSignal
+) {
+  const query = signal
+    ? supabase
+        .rpc("rpc_lead_responses_count", { ...scopeParams(filters), p_search: search })
+        .abortSignal(signal)
+    : supabase.rpc("rpc_lead_responses_count", { ...scopeParams(filters), p_search: search })
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? 0) as number
 }
 
 export async function fetchStepResults(filters: DashboardFilters, signal?: AbortSignal) {
@@ -96,6 +119,7 @@ export async function fetchDevicePerformance(filters: DashboardFilters, signal?:
 export interface LeadAuditPage {
   rows: LeadAuditRow[]
   hasMore: boolean
+  total: number
 }
 
 export async function fetchLeadAudit(
@@ -106,23 +130,47 @@ export async function fetchLeadAudit(
   pageSize = 100,
   signal?: AbortSignal
 ): Promise<LeadAuditPage> {
-  const rows = await readRows<LeadAuditRow>(
-    supabase.rpc("rpc_lead_audit", {
-      ...scopeParams(filters),
-      p_purchase: statusFilters.purchase === "all" ? null : statusFilters.purchase === "yes",
-      p_ic: statusFilters.ic === "all" ? null : statusFilters.ic === "yes",
-      p_contact: statusFilters.contact === "all" ? null : statusFilters.contact === "yes",
-      p_search: search.trim() || null,
-      p_limit: pageSize + 1,
-      p_offset: page * pageSize,
-    }),
-    signal
-  )
+  const statusParams = {
+    p_purchase: statusFilters.purchase === "all" ? null : statusFilters.purchase === "yes",
+    p_ic: statusFilters.ic === "all" ? null : statusFilters.ic === "yes",
+    p_contact: statusFilters.contact === "all" ? null : statusFilters.contact === "yes",
+    p_search: search.trim() || null,
+  }
+
+  const [rows, total] = await Promise.all([
+    readRows<LeadAuditRow>(
+      supabase.rpc("rpc_lead_audit", {
+        ...scopeParams(filters),
+        ...statusParams,
+        p_limit: pageSize + 1,
+        p_offset: page * pageSize,
+      }),
+      signal
+    ),
+    fetchLeadAuditCount(filters, statusParams, signal),
+  ])
 
   return {
     rows: rows.slice(0, pageSize),
     hasMore: rows.length > pageSize,
+    total,
   }
+}
+
+async function fetchLeadAuditCount(
+  filters: DashboardFilters,
+  statusParams: { p_purchase: boolean | null; p_ic: boolean | null; p_contact: boolean | null; p_search: string | null },
+  signal?: AbortSignal
+) {
+  const query = signal
+    ? supabase
+        .rpc("rpc_lead_audit_count", { ...scopeParams(filters), ...statusParams })
+        .abortSignal(signal)
+    : supabase.rpc("rpc_lead_audit_count", { ...scopeParams(filters), ...statusParams })
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? 0) as number
 }
 
 export async function fetchLeadAuditSummary(filters: DashboardFilters, signal?: AbortSignal) {

@@ -142,6 +142,7 @@ export function ResultadosPage() {
         <div className="flex w-full flex-shrink-0 flex-col gap-4 md:w-72">
           <MetricCard
             title="Taxa de Interação"
+            hint="% de quem viu esta etapa e disparou o evento de avanço (page_avance) — não conta quem só respondeu sem avançar."
             value={loading ? <Skeleton className="h-7 w-16" /> : formatPercent(selectedStep?.interaction_rate)}
           />
           <MetricCard
@@ -150,6 +151,7 @@ export function ResultadosPage() {
           />
           <MetricCard
             title="Passagem"
+            hint="% de leads da primeira etapa do funil que chegaram até esta etapa."
             value={loading ? <Skeleton className="h-7 w-16" /> : formatPercent(selectedStep?.passage_rate)}
           />
           <MetricCard
