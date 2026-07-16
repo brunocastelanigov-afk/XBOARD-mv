@@ -3,6 +3,7 @@ import { MetricCard } from "@/components/composites/metric-card"
 import { ChartCard } from "@/components/composites/chart-card"
 import { FilterBar } from "@/components/composites/filter-bar"
 import { Badge } from "@/components/atoms/badge"
+import { Skeleton } from "@/components/atoms/skeleton"
 import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
 import {
@@ -166,41 +167,49 @@ export function PerformancePage() {
         )}
 
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-          <MetricCard title="Score Geral" value={loading ? "..." : formatPercent(weightedAverage(performanceRows, "score") / 100)} />
-          <MetricCard title="Acessos" value={loading ? "..." : formatNumber(sum(performanceRows, "visitors"))} />
-          <MetricCard title="Respostas Iniciadas" value={loading ? "..." : formatNumber(sum(performanceRows, "responses_started"))} />
-          <MetricCard title="Conclusões" value={loading ? "..." : formatNumber(sum(performanceRows, "conclusions"))} />
-          <MetricCard title="Tempo Médio" value={loading ? "..." : formatDuration(averageSeconds)} />
+          <MetricCard title="Score Geral" value={loading ? <Skeleton className="h-7 w-16" /> : formatPercent(weightedAverage(performanceRows, "score") / 100)} />
+          <MetricCard title="Acessos" value={loading ? <Skeleton className="h-7 w-16" /> : formatNumber(sum(performanceRows, "visitors"))} />
+          <MetricCard title="Respostas Iniciadas" value={loading ? <Skeleton className="h-7 w-16" /> : formatNumber(sum(performanceRows, "responses_started"))} />
+          <MetricCard title="Conclusões" value={loading ? <Skeleton className="h-7 w-16" /> : formatNumber(sum(performanceRows, "conclusions"))} />
+          <MetricCard title="Tempo Médio" value={loading ? <Skeleton className="h-7 w-16" /> : formatDuration(averageSeconds)} />
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           <ChartCard title="Tráfego e Conversão">
             <div className="mt-4 h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={trafficData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
-                  <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
-                  <Line type="monotone" dataKey="visitors" stroke="var(--muted-foreground)" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="leads" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="conclusions" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
-                </LineChart>
-              </ResponsiveContainer>
+              {loading ? (
+                <Skeleton className="h-full w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={trafficData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                    <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                    <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                    <Tooltip contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
+                    <Line type="monotone" dataKey="visitors" stroke="var(--muted-foreground)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="leads" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
+                    <Line type="monotone" dataKey="conclusions" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
+                  </LineChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </ChartCard>
 
           <ChartCard title="Funil de Retenção">
             <div className="mt-4 h-[250px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={funnelData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                  <XAxis type="number" stroke="var(--muted-foreground)" fontSize={12} />
-                  <YAxis dataKey="name" type="category" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip cursor={{ fill: "var(--muted)" }} contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
-                  <Bar dataKey="value" fill="var(--chart-1)" radius={[0, 4, 4, 0]} barSize={20} />
-                </BarChart>
-              </ResponsiveContainer>
+              {loading ? (
+                <Skeleton className="h-full w-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={funnelData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                    <XAxis type="number" stroke="var(--muted-foreground)" fontSize={12} />
+                    <YAxis dataKey="name" type="category" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                    <Tooltip cursor={{ fill: "var(--muted)" }} contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
+                    <Bar dataKey="value" fill="var(--chart-1)" radius={[0, 4, 4, 0]} barSize={20} />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </div>
           </ChartCard>
         </div>
@@ -209,7 +218,21 @@ export function PerformancePage() {
           <div className="lg:col-span-2">
             <ChartCard title="Ranking de Campanhas">
               <div className="mt-4 space-y-4">
-                {campaigns.length === 0 ? (
+                {loading ? (
+                  Array.from({ length: 5 }, (_, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center justify-between rounded-md border border-border bg-muted/20 p-3"
+                      style={{ opacity: 1 - index * 0.15 }}
+                    >
+                      <Skeleton className="h-4 w-32" />
+                      <div className="flex gap-4">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-5 w-12 rounded-full" />
+                      </div>
+                    </div>
+                  ))
+                ) : campaigns.length === 0 ? (
                   <div className="py-10 text-center text-sm text-muted-foreground">
                     Nenhuma campanha encontrada.
                   </div>
@@ -230,35 +253,41 @@ export function PerformancePage() {
 
           <ChartCard title="Dispositivos">
             <div className="relative mt-4 flex h-[220px] w-full items-center justify-center">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={devices}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={80}
-                    paddingAngle={5}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {devices.map((entry, index) => (
-                      <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-foreground">
-                    {formatPercent(topDevice?.percentage)}
-                  </div>
-                  <div className="text-xs text-muted-foreground">
-                    {topDevice?.name ?? "Sem dados"}
+              {loading ? (
+                <Skeleton className="h-[160px] w-[160px] rounded-full" />
+              ) : (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={devices}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      stroke="none"
+                    >
+                      {devices.map((entry, index) => (
+                        <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              )}
+              {!loading && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className="text-center">
+                    <div className="text-2xl font-bold text-foreground">
+                      {formatPercent(topDevice?.percentage)}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {topDevice?.name ?? "Sem dados"}
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
             </div>
           </ChartCard>
         </div>

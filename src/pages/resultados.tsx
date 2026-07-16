@@ -2,6 +2,7 @@ import { useMemo, useState } from "react"
 import { LeadsTabBar } from "@/components/composites/leads-tab-bar"
 import { MetricCard } from "@/components/composites/metric-card"
 import { Progress } from "@/components/atoms/progress"
+import { Skeleton } from "@/components/atoms/skeleton"
 import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
 import { fetchStepResults } from "@/lib/dashboard-queries"
@@ -55,20 +56,28 @@ export function ResultadosPage() {
           <div className="mb-2 hidden text-sm font-medium text-muted-foreground md:block">
             Etapas do Funil
           </div>
-          {steps.map((step) => (
-            <button
-              key={step.step_number}
-              onClick={() => setActiveStep(step.step_number)}
-              className={cn(
-                "whitespace-nowrap rounded-md border px-4 py-3 text-left text-sm transition-colors md:whitespace-normal",
-                selectedStep?.step_number === step.step_number
-                  ? "border-primary bg-card font-medium text-primary shadow-sm"
-                  : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground"
-              )}
-            >
-              {step.step_number}. {step.step_name ?? "Etapa"}
-            </button>
-          ))}
+          {loading
+            ? Array.from({ length: 6 }, (_, index) => (
+                <Skeleton
+                  key={index}
+                  className="h-11 w-40 flex-shrink-0 md:w-full"
+                  style={{ opacity: 1 - index * 0.12 }}
+                />
+              ))
+            : steps.map((step) => (
+                <button
+                  key={step.step_number}
+                  onClick={() => setActiveStep(step.step_number)}
+                  className={cn(
+                    "whitespace-nowrap rounded-md border px-4 py-3 text-left text-sm transition-colors md:whitespace-normal",
+                    selectedStep?.step_number === step.step_number
+                      ? "border-primary bg-card font-medium text-primary shadow-sm"
+                      : "border-transparent bg-transparent text-muted-foreground hover:bg-muted/50 hover:text-foreground"
+                  )}
+                >
+                  {step.step_number}. {step.step_name ?? "Etapa"}
+                </button>
+              ))}
         </div>
 
         <div className="flex flex-1 flex-col gap-4">
@@ -86,9 +95,21 @@ export function ResultadosPage() {
                 Não foi possível carregar resultados.
               </div>
             )}
-            {loading || distribution.length === 0 ? (
+            {loading ? (
+              <div className="space-y-6">
+                {Array.from({ length: 4 }, (_, index) => (
+                  <div key={index} className="space-y-2" style={{ opacity: 1 - index * 0.15 }}>
+                    <div className="flex items-center justify-between">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                    <Skeleton className="h-2 w-full" />
+                  </div>
+                ))}
+              </div>
+            ) : distribution.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">
-                {loading ? "Carregando..." : "Nenhuma resposta encontrada."}
+                Nenhuma resposta encontrada.
               </div>
             ) : (
               <div className="space-y-6">
@@ -121,23 +142,23 @@ export function ResultadosPage() {
         <div className="flex w-full flex-shrink-0 flex-col gap-4 md:w-72">
           <MetricCard
             title="Taxa de Interação"
-            value={formatPercent(selectedStep?.interaction_rate)}
+            value={loading ? <Skeleton className="h-7 w-16" /> : formatPercent(selectedStep?.interaction_rate)}
           />
           <MetricCard
             title="Acessos na Etapa"
-            value={formatNumber(selectedStep?.entries)}
+            value={loading ? <Skeleton className="h-7 w-16" /> : formatNumber(selectedStep?.entries)}
           />
           <MetricCard
             title="Passagem"
-            value={formatPercent(selectedStep?.passage_rate)}
+            value={loading ? <Skeleton className="h-7 w-16" /> : formatPercent(selectedStep?.passage_rate)}
           />
           <MetricCard
             title="Avanços"
-            value={formatNumber(selectedStep?.advances)}
+            value={loading ? <Skeleton className="h-7 w-16" /> : formatNumber(selectedStep?.advances)}
           />
           <MetricCard
             title="Tempo Médio"
-            value={formatDuration(selectedStep?.average_time_seconds)}
+            value={loading ? <Skeleton className="h-7 w-16" /> : formatDuration(selectedStep?.average_time_seconds)}
           />
         </div>
       </div>

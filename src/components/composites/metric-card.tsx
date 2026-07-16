@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils"
 
 interface MetricCardProps extends React.HTMLAttributes<HTMLDivElement> {
   title: string
-  value: string | number
+  value: React.ReactNode
   delta?: string
   deltaType?: "positive" | "negative" | "neutral"
 }

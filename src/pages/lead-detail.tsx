@@ -2,6 +2,7 @@ import { Link, useParams, useSearchParams } from "react-router-dom"
 import { ArrowLeft, CheckCircle2, Clock, ExternalLink, MapPin, Monitor, Tag, User } from "lucide-react"
 import { Badge } from "@/components/atoms/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/atoms/card"
+import { Skeleton } from "@/components/atoms/skeleton"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
 import { fetchLeadDetail } from "@/lib/dashboard-queries"
 import type { LeadAuditEvent, LeadAuditRow } from "@/lib/dashboard-types"
@@ -89,9 +90,54 @@ export function LeadDetailPage() {
           </div>
         )}
 
-        {loading || !lead ? (
+        {loading ? (
+          <div className="mx-auto flex h-full max-w-7xl flex-col gap-6 lg:flex-row">
+            <div className="flex w-full flex-shrink-0 flex-col gap-6 lg:w-80">
+              <Card className="bg-card">
+                <CardContent className="p-6">
+                  <div className="mb-6 flex items-center gap-4">
+                    <Skeleton className="h-16 w-16 rounded-full" />
+                    <div className="flex flex-col gap-2">
+                      <Skeleton className="h-5 w-32" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                  </div>
+                  <div className="space-y-4">
+                    {Array.from({ length: 4 }, (_, index) => (
+                      <div key={index} className="flex items-start gap-3">
+                        <Skeleton className="mt-0.5 h-4 w-4 flex-shrink-0 rounded-full" />
+                        <div className="flex flex-1 flex-col gap-1.5">
+                          <Skeleton className="h-4 w-20" />
+                          <Skeleton className="h-4 w-36" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+            <div className="flex-1">
+              <Card className="flex h-full flex-col bg-card">
+                <CardHeader className="border-b border-border">
+                  <Skeleton className="h-5 w-40" />
+                </CardHeader>
+                <CardContent className="flex-1 space-y-8 p-6">
+                  {Array.from({ length: 5 }, (_, index) => (
+                    <div key={index} className="flex gap-4" style={{ opacity: 1 - index * 0.12 }}>
+                      <Skeleton className="h-10 w-10 flex-shrink-0 rounded-full" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-10 w-3/4" />
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        ) : !lead ? (
           <div className="grid min-h-[320px] place-items-center text-sm text-muted-foreground">
-            {loading ? "Carregando..." : "Lead não encontrado neste escopo."}
+            Lead não encontrado neste escopo.
           </div>
         ) : (
           <div className="mx-auto flex h-full max-w-7xl flex-col gap-6 lg:flex-row">

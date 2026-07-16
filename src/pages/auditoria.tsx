@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom"
 import { Badge } from "@/components/atoms/badge"
 import { Button } from "@/components/atoms/button"
 import { Input } from "@/components/atoms/input"
+import { Skeleton } from "@/components/atoms/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/atoms/table"
 import { FilterBar } from "@/components/composites/filter-bar"
 import { LeadsTabBar } from "@/components/composites/leads-tab-bar"
@@ -152,16 +153,16 @@ export function AuditoriaPage() {
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Badge variant="outline" className="justify-between rounded-md border-border bg-card px-3 py-2">
-            Leads <span>{formatNumber(summary.leads)}</span>
+            Leads <span>{loading ? <Skeleton className="h-4 w-8" /> : formatNumber(summary.leads)}</span>
           </Badge>
           <Badge variant="outline" className="justify-between rounded-md border-border bg-card px-3 py-2">
-            Contato <span>{formatPercent(summary.contactRate)}</span>
+            Contato <span>{loading ? <Skeleton className="h-4 w-8" /> : formatPercent(summary.contactRate)}</span>
           </Badge>
           <Badge variant="outline" className="justify-between rounded-md border-border bg-card px-3 py-2">
-            IC <span>{formatPercent(summary.icRate)}</span>
+            IC <span>{loading ? <Skeleton className="h-4 w-8" /> : formatPercent(summary.icRate)}</span>
           </Badge>
           <Badge variant="outline" className="justify-between rounded-md border-border bg-card px-3 py-2">
-            Compra <span>{formatPercent(summary.purchaseRate)}</span>
+            Compra <span>{loading ? <Skeleton className="h-4 w-8" /> : formatPercent(summary.purchaseRate)}</span>
           </Badge>
         </div>
 
@@ -195,10 +196,30 @@ export function AuditoriaPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {loading || rows.length === 0 ? (
+                {loading ? (
+                  Array.from({ length: 8 }, (_, rowIndex) => (
+                    <TableRow key={rowIndex} style={{ opacity: 1 - rowIndex * 0.08 }}>
+                      <TableCell>
+                        <Skeleton className="mb-1.5 h-4 w-32" />
+                        <Skeleton className="h-3 w-40" />
+                      </TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell>
+                        <Skeleton className="mb-1.5 h-4 w-28" />
+                        <Skeleton className="h-3 w-20" />
+                      </TableCell>
+                      <TableCell><Skeleton className="h-4 w-28" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-20 rounded-full" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
+                      <TableCell><Skeleton className="h-5 w-24 rounded-full" /></TableCell>
+                      <TableCell><Skeleton className="h-4 w-24" /></TableCell>
+                      <TableCell className="text-right"><Skeleton className="ml-auto h-4 w-4" /></TableCell>
+                    </TableRow>
+                  ))
+                ) : rows.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                      {loading ? "Carregando..." : "Nenhum dado encontrado."}
+                      Nenhum dado encontrado.
                     </TableCell>
                   </TableRow>
                 ) : (

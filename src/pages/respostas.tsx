@@ -8,6 +8,7 @@ import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
 import { fetchLeadResponses, fetchStepResults } from "@/lib/dashboard-queries"
 import { Button } from "@/components/atoms/button"
+import { Skeleton } from "@/components/atoms/skeleton"
 import type { LeadResponseRow, LeadStepCell, StepResultRow } from "@/lib/dashboard-types"
 import { formatDateTime, formatPercent } from "@/lib/format"
 
@@ -57,6 +58,18 @@ function uniqueSteps(rows: StepResultRow[]) {
   }
 
   return Array.from(byStep.values()).sort((a, b) => a.step_number - b.step_number)
+}
+
+function buildSkeletonRows(columnCount: number, rowCount = 8) {
+  return Array.from({ length: rowCount }, (_, rowIndex) =>
+    Array.from({ length: columnCount }, (_, colIndex) => (
+      <Skeleton
+        key={colIndex}
+        className={colIndex === 0 ? "h-8 w-36" : "h-8 w-20"}
+        style={{ opacity: 1 - rowIndex * 0.08 }}
+      />
+    ))
+  )
 }
 
 const PAGE_SIZE = 100
@@ -151,7 +164,7 @@ export function RespostasPage() {
           <div className="flex-1 overflow-auto">
             <DataGrid
               columns={columns}
-              data={loading ? [] : rows}
+              data={loading ? buildSkeletonRows(columns.length) : rows}
               className="h-full rounded-none border-0"
             />
           </div>
