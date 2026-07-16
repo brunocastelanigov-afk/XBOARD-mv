@@ -32,10 +32,11 @@ import {
 } from "recharts"
 
 const chartColors = [
-  "oklch(var(--primary))",
-  "oklch(var(--accent))",
-  "oklch(var(--chart-3))",
-  "oklch(var(--destructive))",
+  "var(--chart-1)",
+  "var(--chart-2)",
+  "var(--chart-3)",
+  "var(--chart-4)",
+  "var(--chart-5)",
 ]
 
 function sum(rows: PerformanceRow[], field: keyof PerformanceRow) {
@@ -177,13 +178,13 @@ export function PerformancePage() {
             <div className="mt-4 h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trafficData} margin={{ top: 5, right: 5, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(var(--border))" vertical={false} />
-                  <XAxis dataKey="date" stroke="oklch(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis stroke="oklch(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip contentStyle={{ backgroundColor: "oklch(var(--card))", borderColor: "oklch(var(--border))", borderRadius: "8px" }} />
-                  <Line type="monotone" dataKey="visitors" stroke="oklch(var(--muted-foreground))" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="leads" stroke="oklch(var(--primary))" strokeWidth={2} dot={false} />
-                  <Line type="monotone" dataKey="conclusions" stroke="oklch(var(--chart-3))" strokeWidth={2} dot={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" vertical={false} />
+                  <XAxis dataKey="date" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                  <Tooltip contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
+                  <Line type="monotone" dataKey="visitors" stroke="var(--muted-foreground)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="leads" stroke="var(--chart-1)" strokeWidth={2} dot={false} />
+                  <Line type="monotone" dataKey="conclusions" stroke="var(--chart-2)" strokeWidth={2} dot={false} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -193,11 +194,11 @@ export function PerformancePage() {
             <div className="mt-4 h-[250px] w-full">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={funnelData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="oklch(var(--border))" horizontal={false} />
-                  <XAxis type="number" stroke="oklch(var(--muted-foreground))" fontSize={12} />
-                  <YAxis dataKey="name" type="category" stroke="oklch(var(--muted-foreground))" fontSize={12} tickLine={false} axisLine={false} />
-                  <Tooltip cursor={{ fill: "oklch(var(--muted))" }} contentStyle={{ backgroundColor: "oklch(var(--card))", borderColor: "oklch(var(--border))", borderRadius: "8px" }} />
-                  <Bar dataKey="value" fill="oklch(var(--primary))" radius={[0, 4, 4, 0]} barSize={20} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                  <XAxis type="number" stroke="var(--muted-foreground)" fontSize={12} />
+                  <YAxis dataKey="name" type="category" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
+                  <Tooltip cursor={{ fill: "var(--muted)" }} contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
+                  <Bar dataKey="value" fill="var(--chart-1)" radius={[0, 4, 4, 0]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -245,7 +246,7 @@ export function PerformancePage() {
                       <Cell key={entry.name} fill={chartColors[index % chartColors.length]} />
                     ))}
                   </Pie>
-                  <Tooltip contentStyle={{ backgroundColor: "oklch(var(--card))", borderColor: "oklch(var(--border))", borderRadius: "8px" }} />
+                  <Tooltip contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
                 </PieChart>
               </ResponsiveContainer>
               <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
