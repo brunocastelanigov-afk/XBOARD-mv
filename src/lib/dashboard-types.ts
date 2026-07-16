@@ -52,8 +52,6 @@ export interface LeadResponseRow {
   src: NullableString
   device_type: NullableString
   steps: Record<string, LeadStepCell>
-  events?: unknown
-  metadata?: unknown
 }
 
 export interface AnswerDistributionItem {
