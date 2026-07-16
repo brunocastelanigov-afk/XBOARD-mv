@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { Eye, Search } from "lucide-react"
 import { useNavigate } from "react-router-dom"
 import { Badge } from "@/components/atoms/badge"
@@ -56,20 +56,29 @@ function nextStatus(value: "all" | "yes" | "no") {
   return "all"
 }
 
+const PAGE_SIZE = 100
+
 export function AuditoriaPage() {
   const [search, setSearch] = useState("")
   const [statusFilters, setStatusFilters] = useState(defaultStatusFilters)
+  const [page, setPage] = useState(0)
   const { filters } = useDashboardFilters()
   const navigate = useNavigate()
   const { data, error, loading } = useDashboardQuery(
     () =>
       Promise.all([
-        fetchLeadAudit(filters, statusFilters, search),
+        fetchLeadAudit(filters, statusFilters, search, page, PAGE_SIZE),
         fetchLeadAuditSummary(filters),
       ]),
-    [filters, statusFilters, search]
+    [filters, statusFilters, search, page]
   )
-  const rows = data?.[0] ?? []
+
+  useEffect(() => {
+    setPage(0)
+  }, [filters, statusFilters, search])
+
+  const rows = data?.[0]?.rows ?? []
+  const hasMore = data?.[0]?.hasMore ?? false
   const summary = useMemo(() => aggregateSummary(data?.[1] ?? []), [data])
 
   function leadUrl(leadId: string) {
@@ -162,7 +171,7 @@ export function AuditoriaPage() {
               Auditoria de Leads
             </h3>
             <Badge variant="outline" className="border-border bg-background text-muted-foreground">
-              {formatNumber(rows.length)} registros
+              {formatNumber(rows.length)} nesta página
             </Badge>
           </div>
           {error && (
@@ -231,6 +240,29 @@ export function AuditoriaPage() {
                 )}
               </TableBody>
             </Table>
+          </div>
+          <div className="flex items-center justify-between border-t border-border p-3">
+            <span className="text-xs text-muted-foreground">
+              Página {page + 1}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 0 || loading}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasMore || loading}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próximo
+              </Button>
+            </div>
           </div>
         </div>
       </div>

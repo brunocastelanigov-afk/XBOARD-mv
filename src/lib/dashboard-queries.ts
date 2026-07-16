@@ -84,20 +84,34 @@ export async function fetchDevicePerformance(filters: DashboardFilters) {
   )
 }
 
+export interface LeadAuditPage {
+  rows: LeadAuditRow[]
+  hasMore: boolean
+}
+
 export async function fetchLeadAudit(
   filters: DashboardFilters,
   statusFilters: AuditStatusFilters,
-  search: string
-) {
-  return readRows<LeadAuditRow>(
+  search: string,
+  page: number,
+  pageSize = 100
+): Promise<LeadAuditPage> {
+  const rows = await readRows<LeadAuditRow>(
     supabase.rpc("rpc_lead_audit", {
       ...scopeParams(filters),
       p_purchase: statusFilters.purchase === "all" ? null : statusFilters.purchase === "yes",
       p_ic: statusFilters.ic === "all" ? null : statusFilters.ic === "yes",
       p_contact: statusFilters.contact === "all" ? null : statusFilters.contact === "yes",
       p_search: search.trim() || null,
+      p_limit: pageSize + 1,
+      p_offset: page * pageSize,
     })
   )
+
+  return {
+    rows: rows.slice(0, pageSize),
+    hasMore: rows.length > pageSize,
+  }
 }
 
 export async function fetchLeadAuditSummary(filters: DashboardFilters) {
