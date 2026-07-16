@@ -34,10 +34,30 @@ export async function fetchFilterOptions() {
   return readRows<DashboardFilterOption>(supabase.rpc("rpc_dashboard_filter_options"))
 }
 
-export async function fetchLeadResponses(filters: DashboardFilters) {
-  return readRows<LeadResponseRow>(
-    supabase.rpc("rpc_lead_responses", scopeParams(filters))
+export interface LeadResponsesPage {
+  rows: LeadResponseRow[]
+  hasMore: boolean
+}
+
+export async function fetchLeadResponses(
+  filters: DashboardFilters,
+  search: string,
+  page: number,
+  pageSize = 100
+): Promise<LeadResponsesPage> {
+  const rows = await readRows<LeadResponseRow>(
+    supabase.rpc("rpc_lead_responses", {
+      ...scopeParams(filters),
+      p_search: search.trim() || null,
+      p_limit: pageSize + 1,
+      p_offset: page * pageSize,
+    })
   )
+
+  return {
+    rows: rows.slice(0, pageSize),
+    hasMore: rows.length > pageSize,
+  }
 }
 
 export async function fetchStepResults(filters: DashboardFilters) {

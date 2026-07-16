@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { LeadsTabBar } from "@/components/composites/leads-tab-bar"
 import { FilterBar } from "@/components/composites/filter-bar"
 import { DataGrid } from "@/components/composites/data-grid"
@@ -7,6 +7,7 @@ import { CircularProgress } from "@/components/ui/circular-progress"
 import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
 import { fetchLeadResponses, fetchStepResults } from "@/lib/dashboard-queries"
+import { Button } from "@/components/atoms/button"
 import type { LeadResponseRow, LeadStepCell, StepResultRow } from "@/lib/dashboard-types"
 import { formatDateTime, formatPercent } from "@/lib/format"
 
@@ -58,8 +59,11 @@ function uniqueSteps(rows: StepResultRow[]) {
   return Array.from(byStep.values()).sort((a, b) => a.step_number - b.step_number)
 }
 
+const PAGE_SIZE = 100
+
 export function RespostasPage() {
   const [search, setSearch] = useState("")
+  const [page, setPage] = useState(0)
   const { filters } = useDashboardFilters()
   const {
     data,
@@ -68,31 +72,19 @@ export function RespostasPage() {
   } = useDashboardQuery(
     () =>
       Promise.all([
-        fetchLeadResponses(filters),
+        fetchLeadResponses(filters, search, page, PAGE_SIZE),
         fetchStepResults(filters),
       ]),
-    [filters]
+    [filters, search, page]
   )
 
-  const leads = data?.[0] ?? []
-  const steps = useMemo(() => uniqueSteps(data?.[1] ?? []), [data])
-  const filteredLeads = useMemo(() => {
-    const term = search.trim().toLowerCase()
-    if (!term) return leads
+  useEffect(() => {
+    setPage(0)
+  }, [filters, search])
 
-    return leads.filter((lead) =>
-      [
-        lead.lead_id,
-        lead.lead_name,
-        lead.lead_email,
-        lead.lead_phone,
-        lead.utm_source,
-        lead.utm_campaign,
-      ]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term))
-    )
-  }, [leads, search])
+  const leads = data?.[0]?.rows ?? []
+  const hasMore = data?.[0]?.hasMore ?? false
+  const steps = useMemo(() => uniqueSteps(data?.[1] ?? []), [data])
 
   const columns: React.ReactNode[] = [
     "Lead",
@@ -115,7 +107,7 @@ export function RespostasPage() {
     }),
   ]
 
-  const rows = filteredLeads.map((lead) => [
+  const rows = leads.map((lead) => [
     <div className="min-w-[140px]">
       <div className="font-medium text-foreground">{leadLabel(lead)}</div>
       <div className="text-xs text-muted-foreground">{lead.lead_id}</div>
@@ -162,6 +154,29 @@ export function RespostasPage() {
               data={loading ? [] : rows}
               className="h-full rounded-none border-0"
             />
+          </div>
+          <div className="flex items-center justify-between border-t border-border p-3">
+            <span className="text-xs text-muted-foreground">
+              Página {page + 1}
+            </span>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 0 || loading}
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+              >
+                Anterior
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!hasMore || loading}
+                onClick={() => setPage((p) => p + 1)}
+              >
+                Próximo
+              </Button>
+            </div>
           </div>
         </div>
       </div>
