@@ -22,16 +22,19 @@ function scopeParams(filters: DashboardFilters) {
   }
 }
 
-async function readRows<T>(query: any) {
-  const { data, error } = await query
+async function readRows<T>(query: any, signal?: AbortSignal) {
+  const { data, error } = await (signal ? query.abortSignal(signal) : query)
 
   if (error) throw error
 
   return (data ?? []) as T[]
 }
 
-export async function fetchFilterOptions() {
-  return readRows<DashboardFilterOption>(supabase.rpc("rpc_dashboard_filter_options"))
+export async function fetchFilterOptions(signal?: AbortSignal) {
+  return readRows<DashboardFilterOption>(
+    supabase.rpc("rpc_dashboard_filter_options"),
+    signal
+  )
 }
 
 export interface LeadResponsesPage {
@@ -43,7 +46,8 @@ export async function fetchLeadResponses(
   filters: DashboardFilters,
   search: string,
   page: number,
-  pageSize = 100
+  pageSize = 100,
+  signal?: AbortSignal
 ): Promise<LeadResponsesPage> {
   const rows = await readRows<LeadResponseRow>(
     supabase.rpc("rpc_lead_responses", {
@@ -51,7 +55,8 @@ export async function fetchLeadResponses(
       p_search: search.trim() || null,
       p_limit: pageSize + 1,
       p_offset: page * pageSize,
-    })
+    }),
+    signal
   )
 
   return {
@@ -60,27 +65,31 @@ export async function fetchLeadResponses(
   }
 }
 
-export async function fetchStepResults(filters: DashboardFilters) {
+export async function fetchStepResults(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<StepResultRow>(
-    supabase.rpc("rpc_step_results", scopeParams(filters))
+    supabase.rpc("rpc_step_results", scopeParams(filters)),
+    signal
   )
 }
 
-export async function fetchPerformance(filters: DashboardFilters) {
+export async function fetchPerformance(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<PerformanceRow>(
-    supabase.rpc("rpc_performance", scopeParams(filters))
+    supabase.rpc("rpc_performance", scopeParams(filters)),
+    signal
   )
 }
 
-export async function fetchCampaignPerformance(filters: DashboardFilters) {
+export async function fetchCampaignPerformance(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<CampaignPerformanceRow>(
-    supabase.rpc("rpc_campaign_performance", scopeParams(filters))
+    supabase.rpc("rpc_campaign_performance", scopeParams(filters)),
+    signal
   )
 }
 
-export async function fetchDevicePerformance(filters: DashboardFilters) {
+export async function fetchDevicePerformance(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<DevicePerformanceRow>(
-    supabase.rpc("rpc_device_performance", scopeParams(filters))
+    supabase.rpc("rpc_device_performance", scopeParams(filters)),
+    signal
   )
 }
 
@@ -94,7 +103,8 @@ export async function fetchLeadAudit(
   statusFilters: AuditStatusFilters,
   search: string,
   page: number,
-  pageSize = 100
+  pageSize = 100,
+  signal?: AbortSignal
 ): Promise<LeadAuditPage> {
   const rows = await readRows<LeadAuditRow>(
     supabase.rpc("rpc_lead_audit", {
@@ -105,7 +115,8 @@ export async function fetchLeadAudit(
       p_search: search.trim() || null,
       p_limit: pageSize + 1,
       p_offset: page * pageSize,
-    })
+    }),
+    signal
   )
 
   return {
@@ -114,15 +125,17 @@ export async function fetchLeadAudit(
   }
 }
 
-export async function fetchLeadAuditSummary(filters: DashboardFilters) {
+export async function fetchLeadAuditSummary(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<LeadAuditSummaryRow>(
-    supabase.rpc("rpc_lead_audit_summary", scopeParams(filters))
+    supabase.rpc("rpc_lead_audit_summary", scopeParams(filters)),
+    signal
   )
 }
 
 export async function fetchLeadDetail(
   leadId: string,
-  filters: Partial<DashboardFilters>
+  filters: Partial<DashboardFilters>,
+  signal?: AbortSignal
 ) {
   const rows = await readRows<LeadAuditRow>(
     supabase.rpc("rpc_lead_detail", {
@@ -130,7 +143,8 @@ export async function fetchLeadDetail(
       p_funnel_id: filters.funnelId ?? null,
       p_country: filters.country ?? null,
       p_funnel_variant: filters.funnelVariant ?? null,
-    })
+    }),
+    signal
   )
   return rows[0] ?? null
 }

@@ -70,10 +70,10 @@ export function RespostasPage() {
     error,
     loading,
   } = useDashboardQuery(
-    () =>
+    (signal) =>
       Promise.all([
-        fetchLeadResponses(filters, search, page, PAGE_SIZE),
-        fetchStepResults(filters),
+        fetchLeadResponses(filters, search, page, PAGE_SIZE, signal),
+        fetchStepResults(filters, signal),
       ]),
     [filters, search, page]
   )

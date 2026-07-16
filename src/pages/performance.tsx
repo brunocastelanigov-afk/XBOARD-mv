@@ -128,11 +128,11 @@ function aggregateDevices(rows: DevicePerformanceRow[]) {
 export function PerformancePage() {
   const { filters } = useDashboardFilters()
   const { data, error, loading } = useDashboardQuery(
-    () =>
+    (signal) =>
       Promise.all([
-        fetchPerformance(filters),
-        fetchCampaignPerformance(filters),
-        fetchDevicePerformance(filters),
+        fetchPerformance(filters, signal),
+        fetchCampaignPerformance(filters, signal),
+        fetchDevicePerformance(filters, signal),
       ]),
     [filters]
   )

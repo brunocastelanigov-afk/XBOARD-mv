@@ -37,7 +37,7 @@ export function ResultadosPage() {
     data: rawSteps,
     error,
     loading,
-  } = useDashboardQuery(() => fetchStepResults(filters), [filters])
+  } = useDashboardQuery((signal) => fetchStepResults(filters, signal), [filters])
   const steps = useMemo(() => uniqueSteps(rawSteps ?? []), [rawSteps])
   const selectedStep = steps.find((step) => step.step_number === activeStep) ?? steps[0]
   const distribution = selectedStep?.answer_distribution ?? []

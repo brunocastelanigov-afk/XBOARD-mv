@@ -41,12 +41,16 @@ export function LeadDetailPage() {
   const { id } = useParams()
   const [searchParams] = useSearchParams()
   const { data: lead, error, loading } = useDashboardQuery(
-    () =>
-      fetchLeadDetail(id ?? "", {
-        funnelId: searchParams.get("funnel_id"),
-        country: searchParams.get("country"),
-        funnelVariant: searchParams.get("funnel_variant"),
-      }),
+    (signal) =>
+      fetchLeadDetail(
+        id ?? "",
+        {
+          funnelId: searchParams.get("funnel_id"),
+          country: searchParams.get("country"),
+          funnelVariant: searchParams.get("funnel_variant"),
+        },
+        signal
+      ),
     [id, searchParams]
   )
   const events = lead?.events ?? []

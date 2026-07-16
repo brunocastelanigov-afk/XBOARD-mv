@@ -65,10 +65,10 @@ export function AuditoriaPage() {
   const { filters } = useDashboardFilters()
   const navigate = useNavigate()
   const { data, error, loading } = useDashboardQuery(
-    () =>
+    (signal) =>
       Promise.all([
-        fetchLeadAudit(filters, statusFilters, search, page, PAGE_SIZE),
-        fetchLeadAuditSummary(filters),
+        fetchLeadAudit(filters, statusFilters, search, page, PAGE_SIZE, signal),
+        fetchLeadAuditSummary(filters, signal),
       ]),
     [filters, statusFilters, search, page]
   )

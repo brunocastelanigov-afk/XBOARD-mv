@@ -1,21 +1,24 @@
 import { useEffect, useState, type DependencyList } from "react"
 
-export function useDashboardQuery<T>(load: () => Promise<T>, deps: DependencyList) {
+export function useDashboardQuery<T>(
+  load: (signal: AbortSignal) => Promise<T>,
+  deps: DependencyList
+) {
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    let active = true
+    const controller = new AbortController()
     setLoading(true)
     setError(null)
 
-    load()
+    load(controller.signal)
       .then((nextData) => {
-        if (active) setData(nextData)
+        if (!controller.signal.aborted) setData(nextData)
       })
       .catch((nextError) => {
-        if (active) {
+        if (!controller.signal.aborted) {
           setError(
             nextError instanceof Error
               ? nextError
@@ -24,11 +27,14 @@ export function useDashboardQuery<T>(load: () => Promise<T>, deps: DependencyLis
         }
       })
       .finally(() => {
-        if (active) setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       })
 
+    // Cancels the in-flight Postgres query (not just the client-side
+    // result) so changing filters/pages doesn't leave old queries running
+    // to completion on the server and piling up under real usage.
     return () => {
-      active = false
+      controller.abort()
     }
   }, deps)
 

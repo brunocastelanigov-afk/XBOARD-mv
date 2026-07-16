@@ -33,7 +33,7 @@ export function DashboardFiltersProvider({ children }: { children: ReactNode }) 
   const {
     data: options,
     loading: loadingOptions,
-  } = useDashboardQuery(fetchFilterOptions, [])
+  } = useDashboardQuery((signal) => fetchFilterOptions(signal), [])
 
   const value = useMemo<DashboardFiltersContextValue>(
     () => ({
