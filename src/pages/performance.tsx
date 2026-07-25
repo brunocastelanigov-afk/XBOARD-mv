@@ -1,25 +1,26 @@
-import { LeadsTabBar } from "@/components/composites/leads-tab-bar"
+
 import { MetricCard } from "@/components/composites/metric-card"
 import { ChartCard } from "@/components/composites/chart-card"
 import { FilterBar } from "@/components/composites/filter-bar"
 import { Badge } from "@/components/atoms/badge"
 import { Skeleton } from "@/components/atoms/skeleton"
+import { Progress } from "@/components/atoms/progress"
 import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
 import {
   fetchCampaignPerformance,
   fetchDevicePerformance,
   fetchPerformance,
+  fetchStepResults,
 } from "@/lib/dashboard-queries"
 import type {
   CampaignPerformanceRow,
   DevicePerformanceRow,
   PerformanceRow,
+  StepResultRow,
 } from "@/lib/dashboard-types"
 import { formatDuration, formatNumber, formatPercent, isTestVariant } from "@/lib/format"
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
   Cell,
   Legend,
@@ -81,13 +82,33 @@ function buildTrafficData(rows: PerformanceRow[]) {
   return Array.from(byDate.values())
 }
 
-function buildFunnelData(rows: PerformanceRow[]) {
-  return [
-    { name: "Acessos", value: sum(rows, "visitors") },
-    { name: "Respostas", value: sum(rows, "responses_started") },
-    { name: "Leads", value: sum(rows, "leads") },
-    { name: "Conclusões", value: sum(rows, "conclusions") },
-  ]
+function aggregateSteps(rows: StepResultRow[]) {
+  const byStep = new Map<number, { name: string; entries: number }>()
+  let maxEntries = 0;
+
+  for (const row of rows) {
+    const current = byStep.get(row.step_number) ?? {
+      name: row.step_name ?? `Step ${row.step_number}`,
+      entries: 0,
+    }
+    current.entries += Number(row.entries ?? 0)
+    byStep.set(row.step_number, current)
+  }
+
+  const result = Array.from(byStep.entries()).map(([number, data]) => ({
+    number,
+    name: data.name,
+    entries: data.entries
+  })).sort((a, b) => a.number - b.number)
+
+  if (result.length > 0) {
+     maxEntries = result[0].entries;
+  }
+
+  return result.map(r => ({
+    ...r,
+    percentage: maxEntries > 0 ? (r.entries / maxEntries) * 100 : 0
+  }))
 }
 
 function aggregateCampaigns(rows: CampaignPerformanceRow[]) {
@@ -142,14 +163,16 @@ export function PerformancePage() {
         fetchPerformance(filters, signal),
         fetchCampaignPerformance(filters, signal),
         fetchDevicePerformance(filters, signal),
+        fetchStepResults(filters, signal),
       ]),
     [filters]
   )
   const performanceRows = (data?.[0] ?? []).filter((row) => !isTestVariant(row.funnel_variant))
   const campaignRows = (data?.[1] ?? []).filter((row) => !isTestVariant(row.funnel_variant))
   const deviceRows = (data?.[2] ?? []).filter((row) => !isTestVariant(row.funnel_variant))
+  const stepRows = (data?.[3] ?? []).filter((row) => !isTestVariant(row.funnel_variant))
   const trafficData = buildTrafficData(performanceRows)
-  const funnelData = buildFunnelData(performanceRows)
+  const stepsData = aggregateSteps(stepRows)
   const campaigns = aggregateCampaigns(campaignRows)
   const devices = aggregateDevices(deviceRows)
   const topDevice = devices.sort((a, b) => b.value - a.value)[0]
@@ -162,7 +185,6 @@ export function PerformancePage() {
 
   return (
     <div className="flex h-full flex-col animate-in fade-in duration-500">
-      <LeadsTabBar defaultValue="performance" />
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6">
         <FilterBar showSearch={false} />
@@ -212,19 +234,26 @@ export function PerformancePage() {
           </ChartCard>
 
           <ChartCard title="Funil de Retenção">
-            <div className="mt-4 h-[250px] w-full">
+            <div className="mt-4 flex h-[250px] w-full flex-col gap-4 overflow-y-auto pr-2">
               {loading ? (
                 <Skeleton className="h-full w-full" />
+              ) : stepsData.length === 0 ? (
+                <div className="py-10 text-center text-sm text-muted-foreground">Nenhuma etapa registrada.</div>
               ) : (
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={funnelData} layout="vertical" margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                    <XAxis type="number" stroke="var(--muted-foreground)" fontSize={12} />
-                    <YAxis dataKey="name" type="category" stroke="var(--muted-foreground)" fontSize={12} tickLine={false} axisLine={false} />
-                    <Tooltip cursor={{ fill: "var(--muted)" }} contentStyle={{ backgroundColor: "var(--card)", borderColor: "var(--border)", borderRadius: "8px" }} />
-                    <Bar dataKey="value" fill="var(--chart-1)" radius={[0, 4, 4, 0]} barSize={20} />
-                  </BarChart>
-                </ResponsiveContainer>
+                stepsData.map((step) => (
+                  <div key={step.number} className="flex flex-col gap-1.5">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="font-medium text-foreground">{step.number}. {step.name}</span>
+                      <span className="text-muted-foreground">{formatNumber(step.entries)}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Progress value={step.percentage} className="h-2 flex-1" />
+                      <span className="w-12 text-right text-xs font-medium text-primary">
+                        {formatPercent(step.percentage / 100)}
+                      </span>
+                    </div>
+                  </div>
+                ))
               )}
             </div>
           </ChartCard>

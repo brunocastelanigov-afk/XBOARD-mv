@@ -1,0 +1,51 @@
+schema: 1
+story: '1.1'
+story_title: 'Atribuição de Vendas Lastlink ao Funil (Worker existente + Redirect de Checkout)'
+gate: PASS
+status_reason: 'Implementação e testes completos (13/13 AC cobertas; AC 13 é deploy, intencionalmente não executado). rpc_campaign_roi aplicada em produção por @devops (via Supabase MCP escopado ao projeto correto) e validada com dados reais: is_test corretamente excluído pela função real, matemática de receita líquida conferida via SQL direto.'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-07-24T22:34:00Z'
+
+top_issues:
+  - severity: low
+    description: 'Task 1: persistência de UTM/Vtid em upsell real da Lastlink não confirmada (requer compra real, não simulável nesta auditoria).'
+    suggested_owner: dev
+  - severity: low
+    description: 'Migration original não incluía GRANT EXECUTE nem search_path fixo — ambos corrigidos durante esta revisão (verificado via get_advisors).'
+    suggested_owner: dev
+
+waiver: { active: false }
+
+quality_score: 90
+expires: '2026-08-07T22:34:00Z'
+
+evidence:
+  tests_reviewed: 14
+  risks_identified: 2
+  trace:
+    ac_covered: [1, 2, 3, 4, '4a', 5, 6, 7, 8, 9, 10, 11, 12]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Token comparado em tempo constante, falha fechado se secret ausente; nenhuma nova superfície de SQL injection; PII (buyer_email) tratado conforme padrão já aceito no projeto; function_search_path_mutable corrigido; RLS/grants confirmados via get_advisors (únicos warnings remanescentes são padrões já existentes no projeto para as demais RPCs, não específicos desta story).'
+  performance:
+    status: PASS
+    notes: 'No máximo 2 leituras + 1 escrita por webhook, mesmo padrão de latência das rotas existentes.'
+  reliability:
+    status: PASS
+    notes: 'Janela de corrida teórica na checagem de idempotência (GET antes do POST, sem índice único) é um trade-off de design conscientemente aceito e já documentado nas próprias Dev Notes da story (volume baixo esperado) — não é uma lacuna introduzida por esta implementação.'
+  maintainability:
+    status: PASS
+    notes: 'Segue exatamente as convenções já estabelecidas no worker (JS puro, mesmo padrão de erro/resposta/teste); nenhuma duplicação de lógica.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Considerar índice único funcional em metadata->>lastlink_event_id para eliminar de vez a janela de corrida da idempotência (já mencionado como melhoria opcional na própria story).'
+      refs: ['desafio-treino-trinca-replica/worker/src/supabase-client.js']
+    - action: 'Validar manualmente com uma compra de teste real na Lastlink (front + upsell) se Vtid/UTM persistem no webhook do upsell.'
+      refs: ['desafio-treino-trinca-replica/src/lib/funnelTracker.ts']
+    - action: 'Antes do deploy: wrangler secret put LASTLINK_WEBHOOK_TOKEN em produção + cadastrar a URL do webhook em cada produto Lastlink (ver worker/README.md).'
+      refs: ['desafio-treino-trinca-replica/worker/README.md']

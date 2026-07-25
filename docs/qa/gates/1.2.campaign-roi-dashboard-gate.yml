@@ -1,0 +1,46 @@
+schema: 1
+story: '1.2'
+story_title: 'Página de ROI por Campanha (Frontend)'
+gate: PASS
+status_reason: 'Frontend implementado e testado corretamente (10/10 AC cobertas). rpc_campaign_roi (Story 1.1) aplicada e validada em produção; validação manual literal no navegador segue como follow-up trivial assim que a primeira venda real chegar (produção ainda não tem nenhuma compra real, confirmado via SQL — não é uma lacuna de implementação).'
+reviewer: 'Quinn (Test Architect)'
+updated: '2026-07-24T22:34:00Z'
+
+top_issues:
+  - severity: low
+    description: 'Cobertura de teste Playwright não inclui o caminho de erro de rede (RPC retornando 500), só sucesso e vazio.'
+    suggested_owner: dev
+
+waiver: { active: false }
+
+quality_score: 90
+expires: '2026-08-07T22:34:00Z'
+
+evidence:
+  tests_reviewed: 2
+  risks_identified: 1
+  trace:
+    ac_covered: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+    ac_gaps: []
+
+nfr_validation:
+  security:
+    status: PASS
+    notes: 'Página somente leitura, mesma autenticação/RLS do restante do dashboard; nenhuma credencial real usada no teste automatizado (sessão mockada localmente).'
+  performance:
+    status: PASS
+    notes: 'Mesmo padrão de fetch com abort de requisição anterior (useDashboardQuery) já usado nas demais páginas.'
+  reliability:
+    status: PASS
+    notes: 'Caminho de erro de rede da RPC não coberto por teste automatizado, mas usa o mesmo tratamento de erro já usado (e implicitamente testado em produção) em performance.tsx/auditoria.tsx.'
+  maintainability:
+    status: PASS
+    notes: 'Reaproveita 100% dos componentes/padrões existentes (MetricCard, FilterBar, DataGrid, Skeleton); nenhuma biblioteca de UI nova; auditoria de design system sem achados.'
+
+recommendations:
+  immediate: []
+  future:
+    - action: 'Adicionar um terceiro teste Playwright cobrindo o caminho de erro (RPC retornando 500) para fechar a lacuna de cobertura.'
+      refs: ['dashboard/tests/campaign-roi.spec.ts']
+    - action: 'Assim que a primeira venda real chegar via webhook (pós-deploy), confirmar visualmente no navegador que os filtros alteram o conjunto de resultados corretamente (AC 10, checagem literal).'
+      refs: ['dashboard/src/pages/campaign-roi.tsx']

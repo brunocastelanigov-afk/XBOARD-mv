@@ -4,6 +4,7 @@ export interface DashboardFilters {
   funnelId: NullableString
   country: NullableString
   funnelVariant: NullableString
+  trafficSourceId: NullableString
   dateFrom: string
   dateTo: string
 }
@@ -12,6 +13,7 @@ export interface DashboardFilterOption {
   funnel_id: string
   country: string
   funnel_variant: NullableString
+  traffic_source_id: NullableString
   min_event_date: string
   max_event_date: string
   leads: number
@@ -218,4 +220,18 @@ export interface AuditStatusFilters {
   purchase: "all" | "yes" | "no"
   ic: "all" | "yes" | "no"
   contact: "all" | "yes" | "no"
+}
+
+export interface CampaignRoiRow {
+  traffic_source_id: NullableString
+  utm_source: NullableString
+  utm_campaign: NullableString
+  utm_medium: NullableString
+  front_revenue_cents: number
+  upsell_revenue_cents: number
+  total_revenue_cents: number
+  reversed_revenue_cents: number // total estornado (refund + chargeback), Story 1.1 AC 7
+  front_orders: number
+  upsell_orders: number
+  unmatched_revenue_cents: number // vendas sem lead_id/Vtid resolvido, Story 1.1 AC 5
 }

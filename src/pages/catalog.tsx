@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/atoms/sheet"
 
 import { AppShell } from "@/components/composites/app-shell"
-import { LeadsTabBar } from "@/components/composites/leads-tab-bar"
+
 import { FilterBar } from "@/components/composites/filter-bar"
 import { DataGrid } from "@/components/composites/data-grid"
 import { MetricCard } from "@/components/composites/metric-card"
@@ -114,7 +114,7 @@ export default function CatalogPage() {
             <div className="space-y-4">
               <h3 className="font-medium text-muted-foreground">Sheet (Drawer)</h3>
               <Sheet>
-                <SheetTrigger asChild><Button variant="outline">Open Drawer</Button></SheetTrigger>
+                <SheetTrigger render={<Button variant="outline" />}>Open Drawer</SheetTrigger>
                 <SheetContent>
                   <SheetHeader>
                     <SheetTitle>Timeline Drawer</SheetTitle>
@@ -150,10 +150,7 @@ export default function CatalogPage() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <h3 className="font-medium text-muted-foreground">Leads Tab Bar</h3>
-              <LeadsTabBar />
-            </div>
+
 
             <div className="space-y-2">
               <h3 className="font-medium text-muted-foreground">Filter Bar</h3>

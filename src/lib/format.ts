@@ -29,6 +29,10 @@ export function formatPercent(value: number | null | undefined) {
   return `${(Number(value ?? 0) * 100).toFixed(0)}%`
 }
 
+export function formatCurrency(cents: number | null | undefined) {
+  return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(cents ?? 0) / 100)
+}
+
 export function toIsoDate(date: Date) {
   return date.toISOString().slice(0, 10)
 }

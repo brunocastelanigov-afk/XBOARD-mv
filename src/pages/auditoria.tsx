@@ -7,7 +7,7 @@ import { Input } from "@/components/atoms/input"
 import { Skeleton } from "@/components/atoms/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/atoms/table"
 import { FilterBar } from "@/components/composites/filter-bar"
-import { LeadsTabBar } from "@/components/composites/leads-tab-bar"
+
 import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
@@ -95,7 +95,6 @@ export function AuditoriaPage() {
 
   return (
     <div className="flex h-full flex-col animate-in fade-in duration-500">
-      <LeadsTabBar defaultValue="auditoria" />
 
       <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
         <div className="rounded-lg border border-border bg-card p-4">

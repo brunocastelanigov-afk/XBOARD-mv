@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import { LeadsTabBar } from "@/components/composites/leads-tab-bar"
+
 import { MetricCard } from "@/components/composites/metric-card"
 import { Progress } from "@/components/atoms/progress"
 import { Skeleton } from "@/components/atoms/skeleton"
@@ -49,7 +49,6 @@ export function ResultadosPage() {
 
   return (
     <div className="flex h-full flex-col animate-in fade-in duration-500">
-      <LeadsTabBar defaultValue="resultados" />
 
       <div className="flex flex-1 flex-col gap-6 p-4 md:flex-row md:p-6">
         <div className="flex w-full flex-shrink-0 gap-2 overflow-x-auto pb-2 md:w-64 md:flex-col md:overflow-visible md:pb-0">

@@ -3,25 +3,42 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Input } from "@/components/atoms/input"
 import { DateRangeCalendar } from "@/components/composites/date-range-calendar"
 import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
+import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 
 interface FilterBarProps {
   className?: string
   search?: string
   showSearch?: boolean
+  showTrafficSource?: boolean
   onSearchChange?: (value: string) => void
 }
 
 const allValue = "__all__"
 const nullValue = "__null__"
 
+const trafficSourceLabels: Record<string, string> = {
+  facebook: "Facebook / Meta",
+  tiktok: "TikTok",
+  youtube: "YouTube",
+  google: "Google",
+  organic: "Orgânico",
+  unknown: "Desconhecida",
+}
+
+function labelTrafficSource(value: string) {
+  return trafficSourceLabels[value] ?? value
+}
+
 export function FilterBar({
   className,
   search = "",
   showSearch = true,
+  showTrafficSource = false,
   onSearchChange,
 }: FilterBarProps) {
   const { filters, options, setFilters } = useDashboardFilters()
+  const { isTikTokOnlyUser } = useAuth()
   const funnelOptions = Array.from(new Set(options.map((option) => option.funnel_id)))
 
   useEffect(() => {
@@ -45,6 +62,25 @@ export function FilterBar({
         .map((option) => option.funnel_variant ?? nullValue)
     )
   )
+  const trafficSourceOptions = Array.from(
+    new Set(
+      options
+        .filter((option) => !filters.funnelId || option.funnel_id === filters.funnelId)
+        .filter((option) => !filters.country || option.country === filters.country)
+        .filter((option) => !filters.funnelVariant || option.funnel_variant === filters.funnelVariant)
+        .map((option) => option.traffic_source_id ?? "unknown")
+    )
+  ).sort((a, b) => labelTrafficSource(a).localeCompare(labelTrafficSource(b)))
+
+  useEffect(() => {
+    if (
+      filters.trafficSourceId &&
+      trafficSourceOptions.length > 0 &&
+      !trafficSourceOptions.includes(filters.trafficSourceId)
+    ) {
+      setFilters((current) => ({ ...current, trafficSourceId: null }))
+    }
+  }, [filters.trafficSourceId, setFilters, trafficSourceOptions])
 
   return (
     <div className={cn("flex flex-col gap-3 rounded-lg border border-border bg-card p-3 lg:flex-row lg:items-center lg:justify-between", className)}>
@@ -57,6 +93,7 @@ export function FilterBar({
               country: null,
               funnelId: value,
               funnelVariant: null,
+              trafficSourceId: null,
             }))
           }
         >
@@ -76,6 +113,7 @@ export function FilterBar({
               ...current,
               country: value === allValue ? null : value,
               funnelVariant: null,
+              trafficSourceId: null,
             }))
           }
         >
@@ -95,6 +133,7 @@ export function FilterBar({
             setFilters((current) => ({
               ...current,
               funnelVariant: value === allValue ? null : value,
+              trafficSourceId: null,
             }))
           }
         >
@@ -110,6 +149,29 @@ export function FilterBar({
             ))}
           </SelectContent>
         </Select>
+        {showTrafficSource && !isTikTokOnlyUser && (
+          <Select
+            value={filters.trafficSourceId ?? allValue}
+            onValueChange={(value) =>
+              setFilters((current) => ({
+                ...current,
+                trafficSourceId: value === allValue ? null : value,
+              }))
+            }
+          >
+            <SelectTrigger className="w-full lg:w-[180px]">
+              <SelectValue placeholder="Fonte" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={allValue}>Todas fontes</SelectItem>
+              {trafficSourceOptions.map((trafficSource) => (
+                <SelectItem key={trafficSource} value={trafficSource}>
+                  {labelTrafficSource(trafficSource)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {showSearch && (
           <Input
             value={search}

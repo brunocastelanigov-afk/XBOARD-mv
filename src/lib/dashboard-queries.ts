@@ -2,6 +2,7 @@ import { supabase } from "@/lib/supabase"
 import type {
   AuditStatusFilters,
   CampaignPerformanceRow,
+  CampaignRoiRow,
   DashboardFilterOption,
   DashboardFilters,
   DevicePerformanceRow,
@@ -112,6 +113,16 @@ export async function fetchCampaignPerformance(filters: DashboardFilters, signal
 export async function fetchDevicePerformance(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<DevicePerformanceRow>(
     supabase.rpc("rpc_device_performance", scopeParams(filters)),
+    signal
+  )
+}
+
+export async function fetchCampaignRoi(filters: DashboardFilters, signal?: AbortSignal) {
+  return readRows<CampaignRoiRow>(
+    supabase.rpc("rpc_campaign_roi", {
+      ...scopeParams(filters),
+      p_traffic_source_id: filters.trafficSourceId,
+    }),
     signal
   )
 }

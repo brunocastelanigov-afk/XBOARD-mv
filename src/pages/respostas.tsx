@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import { LeadsTabBar } from "@/components/composites/leads-tab-bar"
+
 import { FilterBar } from "@/components/composites/filter-bar"
 import { DataGrid } from "@/components/composites/data-grid"
 import { Badge } from "@/components/atoms/badge"
@@ -141,14 +141,10 @@ export function RespostasPage() {
 
   return (
     <div className="flex h-full flex-col animate-in fade-in duration-500">
-      <LeadsTabBar defaultValue="respostas" />
 
       <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
-            <div className="flex items-center gap-2 rounded-md border border-border bg-card p-1">
-              <button className="rounded-sm bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors">Etapas</button>
-            </div>
           </div>
           <FilterBar search={searchInput} onSearchChange={setSearchInput} />
         </div>

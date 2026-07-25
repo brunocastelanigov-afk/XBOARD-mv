@@ -13,6 +13,7 @@ import { ResultadosPage } from './pages/resultados'
 import { PerformancePage } from './pages/performance'
 
 import { AuditoriaPage } from './pages/auditoria'
+import { CampaignRoiPage } from './pages/campaign-roi'
 import { LeadDetailPage } from './pages/lead-detail'
 import { LoginPage } from './pages/login'
 import { ForgotPasswordPage } from './pages/forgot-password'
@@ -50,6 +51,10 @@ const router = createBrowserRouter([
         element: <AuditoriaPage />
       },
       {
+        path: 'roi-campanhas',
+        element: <CampaignRoiPage />
+      },
+      {
         path: 'lead/:id',
         element: <LeadDetailPage />
       }
@@ -73,10 +78,14 @@ const router = createBrowserRouter([
   }
 ])
 
+import { TooltipProvider } from '@/components/atoms/tooltip'
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AuthProvider>
-      <RouterProvider router={router} />
+      <TooltipProvider>
+        <RouterProvider router={router} />
+      </TooltipProvider>
     </AuthProvider>
   </StrictMode>,
 )

@@ -14,12 +14,14 @@ interface AuthContextValue {
   user: User | null
   loading: boolean
   isAllowedTeamUser: boolean
+  dashboardRole: string | null
+  isTikTokOnlyUser: boolean
   signOut: () => Promise<void>
 }
 
-const allowedEmail = (
+const allowedEmails = (
   import.meta.env.VITE_DASHBOARD_TEAM_EMAIL as string | undefined
-)?.toLowerCase()
+)?.toLowerCase().split(',').map(e => e.trim()) || []
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 
@@ -44,12 +46,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const value = useMemo<AuthContextValue>(() => {
     const user = session?.user ?? null
     const email = user?.email?.toLowerCase() ?? null
+    const dashboardRole = (user?.app_metadata?.dashboard_role as string | undefined) ?? null
 
     return {
       session,
       user,
       loading,
-      isAllowedTeamUser: Boolean(email && allowedEmail && email === allowedEmail),
+      isAllowedTeamUser: Boolean(email && allowedEmails.includes(email)),
+      dashboardRole,
+      isTikTokOnlyUser: dashboardRole === "tiktok_only",
       signOut: () => supabase.auth.signOut().then(() => undefined),
     }
   }, [loading, session])
