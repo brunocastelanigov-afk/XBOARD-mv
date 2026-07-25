@@ -35,33 +35,36 @@ const initialFilters: DashboardFilters = {
 }
 
 export function DashboardFiltersProvider({ children }: { children: ReactNode }) {
-  const { isTikTokOnlyUser } = useAuth()
+  const { restrictedTrafficSourceId } = useAuth()
   const [filters, setFiltersState] = useState<DashboardFilters>(initialFilters)
   const {
     data: options,
     loading: loadingOptions,
   } = useDashboardQuery((signal) => fetchFilterOptions(signal), [])
 
-  // Story 1.4: usuário tiktok_only nunca pode navegar pra outra fonte de tráfego — a UI já
-  // esconde o seletor (ver FilterBar), mas travamos aqui também para não depender só disso
-  // (defesa em profundidade no client; a garantia real é a RPC forçando o filtro no servidor).
+  // Story 1.4 (generalizado): um usuário com dashboard_role="<source>_only" nunca pode navegar
+  // pra outra fonte de tráfego — a UI já esconde o seletor (ver FilterBar), mas travamos aqui
+  // também para não depender só disso (defesa em profundidade no client; a garantia real é a
+  // RPC forçando o filtro no servidor).
   const setFilters = useCallback<Dispatch<SetStateAction<DashboardFilters>>>(
     (update) => {
       setFiltersState((current) => {
         const next = typeof update === "function" ? (update as (prev: DashboardFilters) => DashboardFilters)(current) : update
-        return isTikTokOnlyUser ? { ...next, trafficSourceId: "tiktok" } : next
+        return restrictedTrafficSourceId ? { ...next, trafficSourceId: restrictedTrafficSourceId } : next
       })
     },
-    [isTikTokOnlyUser]
+    [restrictedTrafficSourceId]
   )
 
   useEffect(() => {
-    if (isTikTokOnlyUser) {
+    if (restrictedTrafficSourceId) {
       setFiltersState((current) =>
-        current.trafficSourceId === "tiktok" ? current : { ...current, trafficSourceId: "tiktok" }
+        current.trafficSourceId === restrictedTrafficSourceId
+          ? current
+          : { ...current, trafficSourceId: restrictedTrafficSourceId }
       )
     }
-  }, [isTikTokOnlyUser])
+  }, [restrictedTrafficSourceId])
 
   const value = useMemo<DashboardFiltersContextValue>(
     () => ({

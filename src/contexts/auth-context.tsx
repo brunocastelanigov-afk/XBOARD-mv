@@ -15,8 +15,18 @@ interface AuthContextValue {
   loading: boolean
   isAllowedTeamUser: boolean
   dashboardRole: string | null
-  isTikTokOnlyUser: boolean
+  /** Traffic source this user is locked to (derived from a `dashboard_role` of the form
+   * `<source>_only`, e.g. "tiktok_only" -> "tiktok", "google_only" -> "google"), or null if
+   * the user isn't restricted. Generalizes the tiktok-only isolation from Story 1.4 to any
+   * source. Real enforcement lives server-side in the RPCs — this only drives the UI. */
+  restrictedTrafficSourceId: string | null
   signOut: () => Promise<void>
+}
+
+function deriveRestrictedTrafficSourceId(dashboardRole: string | null): string | null {
+  if (!dashboardRole) return null
+  const match = dashboardRole.match(/^(.+)_only$/)
+  return match ? match[1] : null
 }
 
 const allowedEmails = (
@@ -54,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       isAllowedTeamUser: Boolean(email && allowedEmails.includes(email)),
       dashboardRole,
-      isTikTokOnlyUser: dashboardRole === "tiktok_only",
+      restrictedTrafficSourceId: deriveRestrictedTrafficSourceId(dashboardRole),
       signOut: () => supabase.auth.signOut().then(() => undefined),
     }
   }, [loading, session])

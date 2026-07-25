@@ -38,7 +38,7 @@ export function FilterBar({
   onSearchChange,
 }: FilterBarProps) {
   const { filters, options, setFilters } = useDashboardFilters()
-  const { isTikTokOnlyUser } = useAuth()
+  const { restrictedTrafficSourceId } = useAuth()
   const funnelOptions = Array.from(new Set(options.map((option) => option.funnel_id)))
 
   useEffect(() => {
@@ -149,7 +149,7 @@ export function FilterBar({
             ))}
           </SelectContent>
         </Select>
-        {showTrafficSource && !isTikTokOnlyUser && (
+        {showTrafficSource && !restrictedTrafficSourceId && (
           <Select
             value={filters.trafficSourceId ?? allValue}
             onValueChange={(value) =>
