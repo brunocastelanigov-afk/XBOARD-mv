@@ -67,7 +67,7 @@ export function AuditoriaPage() {
   const [page, setPage] = useState(0)
   const { filters } = useDashboardFilters()
   const navigate = useNavigate()
-  const { data, error, loading } = useDashboardQuery(
+  const { data, error, loading, isRefetching, refetch } = useDashboardQuery(
     (signal) =>
       Promise.all([
         fetchLeadAudit(filters, statusFilters, search, page, PAGE_SIZE, signal),
@@ -150,7 +150,7 @@ export function AuditoriaPage() {
               </Button>
             </div>
           </div>
-          <FilterBar showSearch={false} />
+          <FilterBar showSearch={false} onReload={refetch} isRefetching={isRefetching} />
         </div>
 
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">

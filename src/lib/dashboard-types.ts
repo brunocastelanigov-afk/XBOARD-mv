@@ -7,6 +7,7 @@ export interface DashboardFilters {
   trafficSourceId: NullableString
   dateFrom: string
   dateTo: string
+  is24hActive: boolean
 }
 
 export interface DashboardFilterOption {

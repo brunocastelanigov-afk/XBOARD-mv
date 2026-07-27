@@ -84,6 +84,8 @@ export function RespostasPage() {
     data,
     error,
     loading,
+    isRefetching,
+    refetch,
   } = useDashboardQuery(
     (signal) =>
       Promise.all([
@@ -146,7 +148,12 @@ export function RespostasPage() {
         <div className="flex flex-col gap-4">
           <div className="flex items-center gap-2 overflow-x-auto pb-2">
           </div>
-          <FilterBar search={searchInput} onSearchChange={setSearchInput} />
+          <FilterBar
+            search={searchInput}
+            onSearchChange={setSearchInput}
+            onReload={refetch}
+            isRefetching={isRefetching}
+          />
         </div>
 
         <div className="flex flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">

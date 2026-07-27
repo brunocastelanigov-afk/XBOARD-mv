@@ -157,7 +157,7 @@ function aggregateDevices(rows: DevicePerformanceRow[]) {
 
 export function PerformancePage() {
   const { filters } = useDashboardFilters()
-  const { data, error, loading } = useDashboardQuery(
+  const { data, error, loading, isRefetching, refetch } = useDashboardQuery(
     (signal) =>
       Promise.all([
         fetchPerformance(filters, signal),
@@ -187,7 +187,7 @@ export function PerformancePage() {
     <div className="flex h-full flex-col animate-in fade-in duration-500">
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6">
-        <FilterBar showSearch={false} />
+        <FilterBar showSearch={false} onReload={refetch} isRefetching={isRefetching} />
 
         {error && (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">

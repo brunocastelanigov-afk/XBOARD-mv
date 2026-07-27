@@ -1,6 +1,8 @@
 import { useEffect } from "react"
+import { RefreshCw } from "lucide-react"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/atoms/select"
 import { Input } from "@/components/atoms/input"
+import { Button } from "@/components/atoms/button"
 import { DateRangeCalendar } from "@/components/composites/date-range-calendar"
 import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
 import { useAuth } from "@/contexts/auth-context"
@@ -12,6 +14,10 @@ interface FilterBarProps {
   showSearch?: boolean
   showTrafficSource?: boolean
   onSearchChange?: (value: string) => void
+  // Problema 03: cada página tem sua própria query/refetch (RPCs diferentes), por isso o
+  // botão de reload mora aqui (componente compartilhado) mas recebe o refetch de quem chama.
+  onReload?: () => void
+  isRefetching?: boolean
 }
 
 const allValue = "__all__"
@@ -36,6 +42,8 @@ export function FilterBar({
   showSearch = true,
   showTrafficSource = false,
   onSearchChange,
+  onReload,
+  isRefetching = false,
 }: FilterBarProps) {
   const { filters, options, setFilters } = useDashboardFilters()
   const { restrictedTrafficSourceId } = useAuth()
@@ -185,6 +193,7 @@ export function FilterBar({
         <DateRangeCalendar
           dateFrom={filters.dateFrom}
           dateTo={filters.dateTo}
+          is24hActive={filters.is24hActive}
           onChange={(range) =>
             setFilters((current) => ({
               ...current,
@@ -192,6 +201,18 @@ export function FilterBar({
             }))
           }
         />
+        {onReload && (
+          <Button
+            type="button"
+            variant="outline"
+            size="icon-sm"
+            aria-label="Atualizar dados"
+            onClick={onReload}
+            disabled={isRefetching}
+          >
+            <RefreshCw className={cn("h-4 w-4", isRefetching && "animate-spin")} />
+          </Button>
+        )}
       </div>
     </div>
   )

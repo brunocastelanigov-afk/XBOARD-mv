@@ -31,6 +31,7 @@ const initialFilters: DashboardFilters = {
   country: null,
   funnelVariant: null,
   trafficSourceId: null,
+  is24hActive: false,
   ...lastDaysRange(7),
 }
 

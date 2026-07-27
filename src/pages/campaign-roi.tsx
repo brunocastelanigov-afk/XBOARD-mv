@@ -45,12 +45,13 @@ const columns = [
   "Vendas Upsell",
   "Receita Front",
   "Receita Upsell",
+  "Estornos",
   "Receita Total",
 ]
 
 export function CampaignRoiPage() {
   const { filters } = useDashboardFilters()
-  const { data, error, loading } = useDashboardQuery(
+  const { data, error, loading, isRefetching, refetch } = useDashboardQuery(
     (signal) => fetchCampaignRoi(filters, signal),
     [filters]
   )
@@ -75,6 +76,7 @@ export function CampaignRoiPage() {
           formatNumber(row.upsell_orders),
           formatCurrency(row.front_revenue_cents),
           formatCurrency(row.upsell_revenue_cents),
+          formatCurrency(row.reversed_revenue_cents),
           formatCurrency(row.total_revenue_cents),
         ])}
       />
@@ -84,7 +86,12 @@ export function CampaignRoiPage() {
   return (
     <div className="flex h-full flex-col animate-in fade-in duration-500">
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6">
-        <FilterBar showSearch={false} showTrafficSource />
+        <FilterBar
+          showSearch={false}
+          showTrafficSource
+          onReload={refetch}
+          isRefetching={isRefetching}
+        />
 
         {error && (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">

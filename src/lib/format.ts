@@ -33,8 +33,14 @@ export function formatCurrency(cents: number | null | undefined) {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(Number(cents ?? 0) / 100)
 }
 
+// Problema 04: "hoje"/"ontem" precisam ser calculados no calendário de Brasília, não em UTC
+// nem no fuso local do navegador -- senão o filtro de data diverge do que o gestor de
+// tráfego vê no UTMify/Lastlink perto da meia-noite BRT.
+const BRAZIL_TIME_ZONE = "America/Sao_Paulo"
+const brazilDateFormatter = new Intl.DateTimeFormat("en-CA", { timeZone: BRAZIL_TIME_ZONE })
+
 export function toIsoDate(date: Date) {
-  return date.toISOString().slice(0, 10)
+  return brazilDateFormatter.format(date)
 }
 
 const TEST_VARIANT_PATTERN = /smoke|codex|root_variant_test/i
@@ -45,8 +51,7 @@ export function isTestVariant(variant: string | null | undefined) {
 
 export function lastDaysRange(days: number) {
   const to = new Date()
-  const from = new Date()
-  from.setDate(to.getDate() - days)
+  const from = new Date(to.getTime() - days * 24 * 60 * 60 * 1000)
   return {
     dateFrom: toIsoDate(from),
     dateTo: toIsoDate(to),

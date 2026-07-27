@@ -101,6 +101,12 @@ test("página de ROI de campanhas renderiza métricas e tabela a partir da RPC",
   await expect(page.getByRole("cell", { name: "tiktok / camp_upsell_chargeback" })).toBeVisible()
   await expect(page.getByRole("cell", { name: "R$ 197,00" }).first()).toBeVisible()
 
+  // Problema 01 — coluna "Estornos" por campanha (antes só existia como card agregado
+  // "Estornada"): camp_upsell_chargeback teve reversed_revenue_cents = 9700 (R$ 97,00) e
+  // camp_front_full_refund teve reversed_revenue_cents = 19700 (R$ 197,00).
+  await expect(page.getByRole("columnheader", { name: "Estornos" }).first()).toBeVisible()
+  await expect(page.getByRole("cell", { name: "R$ 97,00" })).toBeVisible()
+
   await page.screenshot({ path: "docs/screenshots/campaign-roi-todas-fontes.png", fullPage: true })
 })
 
