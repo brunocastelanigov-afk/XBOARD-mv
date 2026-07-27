@@ -93,6 +93,32 @@ test("clicar novamente em 24 horas desliga o toggle e reabilita o calendário", 
   await expect(page.getByLabel("Data inicial")).toBeEnabled()
 })
 
+test("desativar 24 horas volta pro dia de hoje (BRT), não deixa o range de 2 dias do 24h parado ali", async ({ page }) => {
+  // Bug relatado: "24 horas" e "hoje" mostravam o mesmo resultado -- porque desativar o
+  // toggle mantinha o dateFrom/dateTo que "24 horas" tinha calculado (ontem + hoje, 2 dias
+  // de calendário), em vez de resetar pra um único dia. Fixa o relógio pra o teste não
+  // depender da hora real em que ele roda.
+  await page.clock.install({ time: new Date("2026-07-27T20:00:00Z") }) // 17:00 BRT
+
+  await mockAuthAndRpcs(page)
+  await page.goto("/roi-campanhas")
+
+  const toggleButton = page.getByRole("button", { name: "24 horas" })
+  const dateFromInput = page.getByLabel("Data inicial")
+  const dateToInput = page.getByLabel("Data final")
+
+  await toggleButton.click()
+  await expect(dateFromInput).toHaveValue("Últimas 24h")
+
+  await toggleButton.click()
+  await expect(toggleButton).toHaveAttribute("aria-pressed", "false")
+
+  // Antes do fix, aqui dateFrom ficava "2026-07-26" (o "ontem" que 24h calculou) em vez de
+  // "2026-07-27" (hoje) -- fazendo o filtro continuar cobrindo 2 dias por engano.
+  await expect(dateFromInput).toHaveValue("2026-07-27")
+  await expect(dateToInput).toHaveValue("2026-07-27")
+})
+
 test("estado do toggle 24h é compartilhado entre páginas (mesmo DashboardFiltersProvider)", async ({ page }) => {
   await mockAuthAndRpcs(page)
   await page.goto("/roi-campanhas")

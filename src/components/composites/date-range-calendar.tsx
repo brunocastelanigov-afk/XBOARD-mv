@@ -1,7 +1,7 @@
 import { CalendarDays } from "lucide-react"
 import { Button } from "@/components/atoms/button"
 import { Input } from "@/components/atoms/input"
-import { lastDaysRange } from "@/lib/format"
+import { lastDaysRange, toIsoDate } from "@/lib/format"
 import { cn } from "@/lib/utils"
 
 interface DateRangeCalendarProps {
@@ -29,7 +29,12 @@ export function DateRangeCalendar({
 }: DateRangeCalendarProps) {
   function toggleLast24h() {
     if (is24hActive) {
-      onChange({ dateFrom, dateTo, is24hActive: false })
+      // "24 horas" cobre 2 dias-calendário (ex.: 26/07 e 27/07, pra fechar uma janela de
+      // 24h de verdade). Ao desativar, não faz sentido manter esse range de 2 dias como se
+      // fosse "hoje" -- isso fazia o usuário achar que "hoje" e "24 horas" davam o mesmo
+      // resultado. Desativar reseta para o dia de hoje (Brasília) apenas.
+      const today = toIsoDate(new Date())
+      onChange({ dateFrom: today, dateTo: today, is24hActive: false })
       return
     }
     onChange({ ...lastDaysRange(1), is24hActive: true })
