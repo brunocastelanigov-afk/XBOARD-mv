@@ -5,18 +5,14 @@
 -- e recalcula funnel_events do zero a cada chamada — reprocessando JSON, reclassificando
 -- origem, e fazendo count(distinct lead_id) toda vez.
 --
--- ATENÇÃO — NÃO APLICAR ESTA MIGRAÇÃO ÀS CEGAS: o SELECT abaixo assume que
--- dashboard_filter_options_mv tem exatamente as colunas
--- (funnel_id, country, funnel_variant, traffic_source_id, min_event_date, max_event_date, leads)
--- — o mesmo shape retornado pela função atual (ver 20260727200000_fix_america_sao_paulo_date_bucketing.sql,
--- linhas 180-225). Isso não foi confirmado contra o schema ao vivo (Supabase indisponível
--- durante um upgrade de compute no momento em que esta migração foi escrita). Antes de aplicar:
---   select column_name, data_type from information_schema.columns
---   where table_schema = 'public' and table_name = 'dashboard_filter_options_mv'
---   order by ordinal_position;
--- Se os nomes/tipos não baterem, ajustar o SELECT abaixo antes de aplicar.
+-- DEPENDE de 20260728210555_add_traffic_source_id_to_filter_options_mv.sql e
+-- 20260728210649_fix_leads_filter_in_filter_options_mv.sql (aplicadas antes desta) —
+-- auditoria contra o schema ao vivo confirmou que dashboard_filter_options_mv originalmente
+-- não tinha traffic_source_id, e que "leads" precisava do mesmo filtro de event_type que
+-- este RPC já usa (ver a segunda migração pro porquê — sem isso, leads_filtered divergia
+-- de mv.leads em 7 de 10 linhas na comparação ao vivo).
 --
--- Também precisa preservar o isolamento de role por fonte de tráfego (effective_filter,
+-- Precisa preservar o isolamento de role por fonte de tráfego (effective_filter,
 -- dashboard_role terminado em "_only") que a versão atual já implementa — senão usuários
 -- com role tiktok_only (etc.) passam a ver dados de outras fontes.
 
