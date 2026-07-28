@@ -55,7 +55,7 @@ export async function fetchLeadResponses(
 
   const [rows, total] = await Promise.all([
     readRows<LeadResponseRow>(
-      supabase.rpc("rpc_lead_responses", {
+      supabase.rpc("rpc_lead_responses_fast", {
         ...scopeParams(filters),
         p_search: searchParam,
         p_limit: pageSize + 1,
@@ -80,9 +80,9 @@ async function fetchLeadResponsesCount(
 ) {
   const query = signal
     ? supabase
-        .rpc("rpc_lead_responses_count", { ...scopeParams(filters), p_search: search })
+        .rpc("rpc_lead_responses_count_fast", { ...scopeParams(filters), p_search: search })
         .abortSignal(signal)
-    : supabase.rpc("rpc_lead_responses_count", { ...scopeParams(filters), p_search: search })
+    : supabase.rpc("rpc_lead_responses_count_fast", { ...scopeParams(filters), p_search: search })
 
   const { data, error } = await query
   if (error) throw error
@@ -91,30 +91,37 @@ async function fetchLeadResponsesCount(
 
 export async function fetchStepResults(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<StepResultRow>(
-    supabase.rpc("rpc_step_results", scopeParams(filters)),
+    supabase.rpc("rpc_step_results_fast", scopeParams(filters)),
     signal
   )
 }
 
 export async function fetchPerformance(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<PerformanceRow>(
-    supabase.rpc("rpc_performance", scopeParams(filters)),
+    supabase.rpc("rpc_performance_fast", scopeParams(filters)),
     signal
   )
 }
 
 export async function fetchCampaignPerformance(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<CampaignPerformanceRow>(
-    supabase.rpc("rpc_campaign_performance", scopeParams(filters)),
+    supabase.rpc("rpc_campaign_performance_fast", scopeParams(filters)),
     signal
   )
 }
 
 export async function fetchDevicePerformance(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<DevicePerformanceRow>(
-    supabase.rpc("rpc_device_performance", scopeParams(filters)),
+    supabase.rpc("rpc_device_performance_fast", scopeParams(filters)),
     signal
   )
+}
+
+// Best-effort: forces the performance rollup tables up to date on-demand,
+// same mechanism pg_cron uses every 5 min. Failure here should never block
+// the actual data refetch that follows it.
+export async function triggerPerformanceRollupRefresh() {
+  await supabase.rpc("refresh_funnel_performance_rollups")
 }
 
 export async function fetchCampaignRoi(filters: DashboardFilters, signal?: AbortSignal) {
@@ -150,7 +157,7 @@ export async function fetchLeadAudit(
 
   const [rows, total] = await Promise.all([
     readRows<LeadAuditRow>(
-      supabase.rpc("rpc_lead_audit", {
+      supabase.rpc("rpc_lead_audit_fast", {
         ...scopeParams(filters),
         ...statusParams,
         p_limit: pageSize + 1,
@@ -175,9 +182,9 @@ async function fetchLeadAuditCount(
 ) {
   const query = signal
     ? supabase
-        .rpc("rpc_lead_audit_count", { ...scopeParams(filters), ...statusParams })
+        .rpc("rpc_lead_audit_count_fast", { ...scopeParams(filters), ...statusParams })
         .abortSignal(signal)
-    : supabase.rpc("rpc_lead_audit_count", { ...scopeParams(filters), ...statusParams })
+    : supabase.rpc("rpc_lead_audit_count_fast", { ...scopeParams(filters), ...statusParams })
 
   const { data, error } = await query
   if (error) throw error
@@ -186,7 +193,7 @@ async function fetchLeadAuditCount(
 
 export async function fetchLeadAuditSummary(filters: DashboardFilters, signal?: AbortSignal) {
   return readRows<LeadAuditSummaryRow>(
-    supabase.rpc("rpc_lead_audit_summary", scopeParams(filters)),
+    supabase.rpc("rpc_lead_audit_summary_fast", scopeParams(filters)),
     signal
   )
 }

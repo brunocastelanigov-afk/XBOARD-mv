@@ -1,21 +1,9 @@
 import { useCallback, useEffect, useRef, useState, type DependencyList } from "react"
 
-// Problema 03: dashboard não tinha nenhuma forma de saber que os dados na tela ficaram
-// desatualizados. Poll silencioso de 1 minuto (sem websocket, pra não arriscar a experiência
-// em tempo real) + um refetch manual que o botão de reload dispara e que reinicia o timer do
-// poll (clicar reload não deve deixar um segundo fetch disparando logo em seguida).
-const DEFAULT_POLL_INTERVAL_MS = 60_000
-
-interface UseDashboardQueryOptions {
-  pollIntervalMs?: number
-}
-
 export function useDashboardQuery<T>(
   load: (signal: AbortSignal) => Promise<T>,
-  deps: DependencyList,
-  options?: UseDashboardQueryOptions
+  deps: DependencyList
 ) {
-  const pollIntervalMs = options?.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
@@ -63,23 +51,16 @@ export function useDashboardQuery<T>(
         })
     }
 
-    let timerId = setInterval(() => runLoad(true), pollIntervalMs)
-
-    triggerRefetchRef.current = () => {
-      runLoad(true)
-      clearInterval(timerId)
-      timerId = setInterval(() => runLoad(true), pollIntervalMs)
-    }
+    triggerRefetchRef.current = () => runLoad(true)
 
     runLoad(false)
 
     return () => {
       cancelled = true
       activeController?.abort()
-      clearInterval(timerId)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, pollIntervalMs])
+  }, deps)
 
   const refetch = useCallback(() => {
     triggerRefetchRef.current()

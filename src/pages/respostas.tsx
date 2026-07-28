@@ -7,7 +7,7 @@ import { CircularProgress } from "@/components/ui/circular-progress"
 import { useDashboardFilters } from "@/contexts/dashboard-filters-context"
 import { useDashboardQuery } from "@/hooks/use-dashboard-query"
 import { useDebouncedValue } from "@/hooks/use-debounced-value"
-import { fetchLeadResponses, fetchStepResults } from "@/lib/dashboard-queries"
+import { fetchLeadResponses, fetchStepResults, triggerPerformanceRollupRefresh } from "@/lib/dashboard-queries"
 import { Button } from "@/components/atoms/button"
 import { Skeleton } from "@/components/atoms/skeleton"
 import type { LeadResponseRow, LeadStepCell, StepResultRow } from "@/lib/dashboard-types"
@@ -104,6 +104,13 @@ export function RespostasPage() {
   const total = data?.[0]?.total ?? 0
   const steps = useMemo(() => uniqueSteps(data?.[1] ?? []), [data])
 
+  // Best-effort rollup refresh ahead of the manual reload -- refetch() still
+  // runs even if this fails, so reload never blocks on it.
+  const handleReload = async () => {
+    await triggerPerformanceRollupRefresh().catch(() => {})
+    refetch()
+  }
+
   const columns: React.ReactNode[] = [
     "Lead",
     "Data",
@@ -151,7 +158,7 @@ export function RespostasPage() {
           <FilterBar
             search={searchInput}
             onSearchChange={setSearchInput}
-            onReload={refetch}
+            onReload={handleReload}
             isRefetching={isRefetching}
           />
         </div>

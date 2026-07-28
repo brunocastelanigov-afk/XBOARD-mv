@@ -12,6 +12,7 @@ import {
   fetchDevicePerformance,
   fetchPerformance,
   fetchStepResults,
+  triggerPerformanceRollupRefresh,
 } from "@/lib/dashboard-queries"
 import type {
   CampaignPerformanceRow,
@@ -183,11 +184,18 @@ export function PerformancePage() {
       0
     ) / Math.max(sum(performanceRows, "visitors"), 1)
 
+  // Best-effort rollup refresh ahead of the manual reload -- refetch() still
+  // runs even if this fails, so reload never blocks on it.
+  const handleReload = async () => {
+    await triggerPerformanceRollupRefresh().catch(() => {})
+    refetch()
+  }
+
   return (
     <div className="flex h-full flex-col animate-in fade-in duration-500">
 
       <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6">
-        <FilterBar showSearch={false} onReload={refetch} isRefetching={isRefetching} />
+        <FilterBar showSearch={false} onReload={handleReload} isRefetching={isRefetching} />
 
         {error && (
           <div className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
