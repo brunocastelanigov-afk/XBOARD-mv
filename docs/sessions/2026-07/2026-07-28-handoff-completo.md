@@ -1,6 +1,6 @@
 # Handoff Completo — Otimização de Leitura do Dashboard (2026-07-28)
 
-> **Status geral: TRABALHO DE CÓDIGO CONCLUÍDO.** Todas as 9 RPCs otimizadas (4 de `/performance` + 5 de `/respostas`/`/auditoria`) estão validadas e no ar. Restam 3 itens pendentes fora do escopo de código: RLS desabilitado (seção 1), o mistério do timeout do `pg_cron` (seção 4.2), e um achado de contenção de CPU na instância que sugere upgrade de tier (seção 8.4). Este documento existe pra garantir que ninguém (humano ou IA) precise reconstruir o raciocínio do zero. Leia inteiro antes de continuar — a ordem das seções segue a ordem cronológica real da investigação, porque o "porquê" de cada decisão só faz sentido com o que veio antes.
+> **Status geral: TRABALHO DE CÓDIGO CONCLUÍDO, MAS HÁ UM INCIDENTE ATIVO DE CPU EM PRODUÇÃO (seção 9).** Todas as 9 RPCs otimizadas (4 de `/performance` + 5 de `/respostas`/`/auditoria`) estão validadas e no ar, e continuam corretas — não são a causa da instabilidade atual. Restam 4 itens pendentes fora do escopo de código: RLS desabilitado (seção 1), o mistério do timeout do `pg_cron` (seção 4.2), o achado original de contenção de CPU (seção 8.4), e a escalada desse mesmo problema em tempo real, incluindo um índice que ficou em estado inválido (seção 9 — **LEIA PRIMEIRO se está retomando este trabalho**). Este documento existe pra garantir que ninguém (humano ou IA) precise reconstruir o raciocínio do zero. Leia inteiro antes de continuar — a ordem das seções segue a ordem cronológica real da investigação, porque o "porquê" de cada decisão só faz sentido com o que veio antes.
 
 ---
 
@@ -225,3 +225,105 @@ Seq Scan on funnel_lead_profile_rollup pr (actual time=0.033..2244.065 rows=1206
 **Isso não é um bug de query nem de índice — é um limite de capacidade computacional da instância Supabase sob a carga concorrente atual**, separado de tudo que foi otimizado nesta sessão. Descartei bloat de tabela como causa (`funnel_lead_profile_rollup`: 12k linhas vivas, 4 mortas, autovacuum recente — tabela limpa).
 
 **Ação recomendada, fora do escopo desta sessão**: considerar upgrade do tier de compute do projeto Supabase (mais CPU), dado o crescimento de escala confirmado ao longo desta sessão (tabela dobrou de tamanho em poucas horas). É um problema de infraestrutura/capacidade, não de código.
+
+---
+
+## 9. INCIDENTE ATIVO — contenção de CPU escalou depois do deploy, causa nova encontrada, remediação incompleta
+
+Esta seção documenta o que foi apurado **depois** que as RPCs `_fast` já estavam em produção (seção 8), quando o usuário pediu um status atual do banco. Achado central: **o trabalho desta sessão está correto e não é a causa** — mas o banco está, neste momento, sob contenção de CPU pior do que a documentada na seção 8.4, por uma causa nova e não relacionada.
+
+### 9.1 Confirmação do deploy em produção
+
+Via `gh api repos/:owner/:repo/deployments`: a Vercel tem integração automática de deploy no push pra `main`. O commit desta sessão (`9540d35`, troca das 9 RPCs pras versões `_fast` no frontend) gerou um deployment de **Produção** com status `success`, criado em `2026-07-28T11:35:03Z`. Ou seja, a partir desse horário, usuários reais pararam de bater nas RPCs antigas lentas de `/respostas`/`/auditoria`.
+
+### 9.2 Evidência de que o banco piorou depois do deploy (não é causado por ele)
+
+Checagem de status pedida pelo usuário logo depois do deploy revelou, todos ativos **na janela de ~11:35 a ~11:55, ou seja, depois do fix estar no ar**:
+
+- `get_logs(postgres)`: rajada quase contínua de `ERROR: canceling statement due to statement timeout` — dezenas de ocorrências por minuto.
+- `get_logs(api)`: dezenas de `GET .../funnel_events?...&limit=1` com `status_code: 500` por minuto, além de `POST rpc_campaign_roi` também com 500 — ou seja, RPCs baratas e não relacionadas também estavam falhando, confirmando saturação de CPU generalizada, não um único vilão.
+- `cron.job_run_details`: **os dois jobs de cron** (`refresh_funnel_performance_rollups`, o nosso, e `refresh_dashboard_filter_options_mv`, que **não é desta sessão**) passaram a falhar com `job startup timeout` nas rodadas de 11:35, 11:45, 11:50 e 11:55 — sintoma mais grave que timeout de query: o Postgres não conseguia nem *iniciar* o processo do worker do cron. Uma rodada nossa em 11:40 teve sucesso em 0,027s (prova de que o design da seção 4.3 continua correto quando consegue rodar).
+- `refresh_dashboard_filter_options_mv` (job **pré-existente, nunca tocado nesta sessão**, faz `REFRESH MATERIALIZED VIEW dashboard_filter_options_mv`) falhou às 11:40 depois de **120,7s**, batendo no mesmo teto de ~2min do mistério da seção 4.2 — evidência de que esse teto afeta qualquer job do `pg_cron`, não só o nosso.
+- Chamadas de diagnóstico via MCP (`execute_sql`, `get_advisors`, `apply_migration`) alternavam entre sucesso instantâneo (`select 1`) e `Connection terminated due to connection timeout` — inclusive falhando em ler `pg_stat_activity`, uma operação normalmente trivial.
+
+### 9.3 Causa nova encontrada: query de deduplicação do worker sem índice
+
+Investigando o padrão dominante nos 500s da API (`GET funnel_events?select=event_id&metadata->>lastlink_event_id=eq...&limit=1` — o worker de ingestão checando se um evento do Lastlink já foi inserido antes de gravar), confirmei via `EXPLAIN`:
+
+```
+Limit  (cost=0.00..45.82 rows=1 width=16)
+  ->  Seq Scan on funnel_events  (cost=0.00..25936.76 rows=566 width=16)
+        Filter: ((metadata ->> 'lastlink_event_id'::text) = '...')
+```
+
+**Não existe índice pra essa coluna.** Existem índices parciais equivalentes pra `session_id`, `utm_campaign`, `utm_source` (mesmo padrão `(metadata ->> 'chave') WHERE metadata ? 'chave'`), mas `lastlink_event_id` nunca recebeu o mesmo tratamento. O índice GIN genérico em `metadata` (`funnel_events_metadata_gin_idx`) **não acelera esse tipo de busca** — GIN em jsonb serve pra `@>`/`?`/`?&`/`?|`, não pra igualdade de texto via `->>`. Resultado: **cada evento do Lastlink ingerido dispara um seq scan na tabela inteira**, e nos logs de ~2 minutos contei mais de 90 ocorrências desse padrão, todas com 500. `funnel_events` tem só 110.703 linhas / 277 MB — pequena o bastante que isso não deveria ser lento numa instância saudável; o fato de estar sendo é evidência adicional de falta de CPU, não de volume de dados.
+
+**Esta causa é inteiramente nova, nunca esteve no escopo desta sessão** (que era sobre as RPCs de leitura da dashboard, não sobre o caminho de escrita do worker).
+
+### 9.4 Remediação tentada, INCOMPLETA — precisa retomar
+
+Tentei criar o índice faltante:
+
+```sql
+CREATE INDEX CONCURRENTLY IF NOT EXISTS funnel_events_lastlink_event_id_idx
+ON public.funnel_events ((metadata ->> 'lastlink_event_id'))
+WHERE (metadata ? 'lastlink_event_id');
+```
+
+- 1ª tentativa via `apply_migration`: falhou antes de começar (`Failed to initialise history table: Connection terminated due to connection timeout`).
+- 2ª tentativa via `execute_sql`: a chamada MCP também deu timeout do lado do cliente, **mas o comando continuou rodando no servidor** (confirmado via `pg_stat_activity`, pid vivo). Acompanhado via `pg_stat_progress_create_index`: fase `building index: scanning table`, 1.372 de 24.240 blocos (5,7%) em 83s — ritmo de ~16,5 blocos/s, quando o normal seria completar em segundos. Estimativa na hora: 25-45+ minutos só pra essa passagem.
+- **O build morreu no meio do caminho.** Ao checar de novo minutos depois: o processo (pid 1425172) não existe mais em `pg_stat_activity`, `pg_stat_progress_create_index` está vazio, e o índice existe mas com **`indisvalid = false`** — o estado clássico de falha de `CREATE INDEX CONCURRENTLY`.
+- Tentei limpar (`DROP INDEX CONCURRENTLY IF EXISTS public.funnel_events_lastlink_event_id_idx`): **também deu timeout**, e as duas tentativas seguintes de checar se o `DROP` continuava rodando no servidor **também deram timeout** (mesmo sendo uma leitura trivial de `pg_stat_activity`). Único comando que respondeu de forma confiável nesse momento: `select 1`.
+
+**Estado exato deixado no banco, precisa ser resolvido antes de qualquer nova tentativa:**
+
+```sql
+-- Confirmar primeiro se ainda existe e se está inválido:
+select indexname, indisvalid
+from pg_indexes i
+join pg_class c on c.relname = i.indexname
+join pg_index idx on idx.indexrelid = c.oid
+where i.tablename = 'funnel_events' and i.indexname = 'funnel_events_lastlink_event_id_idx';
+
+-- Se indisvalid = true (índice quebrado, não confiar nele mesmo que exista):
+DROP INDEX CONCURRENTLY IF EXISTS public.funnel_events_lastlink_event_id_idx;
+
+-- Só depois de confirmado limpo, tentar de novo (fora de horário de pico / com o banco mais folgado):
+CREATE INDEX CONCURRENTLY IF NOT EXISTS funnel_events_lastlink_event_id_idx
+ON public.funnel_events ((metadata ->> 'lastlink_event_id'))
+WHERE (metadata ? 'lastlink_event_id');
+```
+
+Um índice inválido não é só inofensivo-e-esperando: ele **continua sendo mantido em todo INSERT/UPDATE** (paga o custo de escrita) sem servir pra nenhuma leitura (o planner ignora índices inválidos) — é puro overhead até ser dropado ou reconstruído com sucesso.
+
+### 9.5 Evidência de que o teto é hardware, não configuração
+
+A pedido do usuário ("dá pra paralelizar a CPU?"), consultei `pg_settings`:
+
+| Parâmetro | Valor | Leitura |
+|---|---|---|
+| `shared_buffers` | ~224 MB | RAM de cache pequena |
+| `max_worker_processes` | 6 | Teto de processos em 2º plano pra tudo: autovacuum, cron, workers paralelos, replicação |
+| `max_parallel_workers` | 2 | Máx. de workers paralelos ativos na instância inteira |
+| `max_parallel_workers_per_gather` | 1 | Uma query só pode pedir 1 worker auxiliar |
+| `max_parallel_maintenance_workers` | 1 | `CREATE INDEX`/`VACUUM` só usam 1 worker auxiliar |
+
+Assinatura clássica do tier **Micro** do Supabase (2 vCPUs compartilhados). `pg_cron`, autovacuum, `CREATE INDEX`, e queries paralelas competem pelos mesmos 6 slots — daí o `job startup timeout` da seção 9.2: quando o pool está saturado, processos novos simplesmente não conseguem nascer. Aumentar esses parâmetros via config não resolve — eles só definem um teto de *tentativa*, não criam núcleos físicos novos; subir o teto numa VM com poucos núcleos reais só pioraria a troca de contexto.
+
+**Conclusão sem ambiguidade**: a única forma estrutural de evitar recorrência é upgrade do compute add-on do projeto Supabase (Micro → Small/Medium ou superior, vCPUs dedicados). Decisão de custo/negócio do usuário, não executável por mim.
+
+### 9.6 Temas para estudo aprofundado (pedido explícito do usuário)
+
+Para a pessoa que quiser entender como empresas grandes resolvem esse tipo de problema, os termos exatos a pesquisar, em ordem de relevância:
+
+1. **CQRS (Command Query Responsibility Segregation)** — é o padrão que as rollups desta sessão implementam na prática (separar caminho de escrita do caminho de leitura).
+2. **Event Sourcing** — `funnel_events` é um log de eventos append-only; as rollups são projeções derivadas dele. Normalmente estudado junto com CQRS (referências: Greg Young, Martin Fowler).
+3. **OLTP/OLAP Workload Isolation via CDC (Change Data Capture)** — o pedaço que falta: grandes empresas não deixam workload transacional e analítico competirem pelo mesmo hardware; replicam via CDC pra um data warehouse separado (ClickHouse, BigQuery, Snowflake, Redshift) ou usam read replicas dedicados.
+4. **Database Capacity Planning / Vertical vs. Horizontal Scaling** — o tema-guarda-chuva que explica por que nenhuma otimização de query resolve um teto de hardware.
+
+### 9.7 Pendências desta seção, em ordem
+
+1. **[BLOQUEIA]** Confirmar estado do índice `funnel_events_lastlink_event_id_idx` (válido / inválido / inexistente) e limpar se preciso (comandos na seção 9.4).
+2. **[BLOQUEIA]** Recriar o índice com sucesso, de preferência com o banco menos carregado (fora de pico, ou depois de um upgrade de tier).
+3. **[NÃO BLOQUEIA]** Investigar se `refresh_dashboard_filter_options_mv` (job pré-existente, seção 9.2) precisa do mesmo tratamento de incremental que demos às rollups de performance — não foi tocado nesta sessão, mas está com o mesmo sintoma de timeout.
+4. **[DECISÃO DO USUÁRIO]** Upgrade do compute add-on Supabase — única correção estrutural real pro teto de CPU (seção 9.5).
