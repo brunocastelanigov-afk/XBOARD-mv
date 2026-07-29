@@ -32,7 +32,7 @@ const router = createBrowserRouter([
     children: [
       {
         index: true,
-        element: <Navigate to="/respostas" replace />
+        element: <Navigate to="/roi-campanhas" replace />
       },
       {
         path: 'respostas',

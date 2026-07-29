@@ -16,7 +16,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   
-  const from = (location.state as { from?: string } | null)?.from || "/respostas"
+  const from = (location.state as { from?: string } | null)?.from || "/roi-campanhas"
   const reason = (location.state as { reason?: string } | null)?.reason
 
   useEffect(() => {

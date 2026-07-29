@@ -25,7 +25,7 @@ export function ResetPasswordPage() {
       return
     }
 
-    navigate("/respostas", { replace: true })
+    navigate("/roi-campanhas", { replace: true })
   }
 
   return (

@@ -18,6 +18,11 @@ import {
 // Menu items
 const items = [
   {
+    title: "ROI de Campanhas",
+    url: "/roi-campanhas",
+    icon: DollarSign,
+  },
+  {
     title: "Respostas",
     url: "/respostas",
     icon: MessageSquare,
@@ -36,11 +41,6 @@ const items = [
     title: "Auditoria de Leads",
     url: "/auditoria",
     icon: ShieldCheck,
-  },
-  {
-    title: "ROI de Campanhas",
-    url: "/roi-campanhas",
-    icon: DollarSign,
   },
 ]
 
