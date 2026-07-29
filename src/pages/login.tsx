@@ -1,19 +1,29 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 import { Mail, LockKeyhole } from "lucide-react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 import { Button } from "@/components/atoms/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/atoms/card"
 import { Input } from "@/components/atoms/input"
+import { useAuth } from "@/contexts/auth-context"
 import { supabase } from "@/lib/supabase"
 
 export function LoginPage() {
+  const { session, isAllowedTeamUser, loading: authLoading } = useAuth()
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
   const location = useLocation()
+  
+  const from = (location.state as { from?: string } | null)?.from || "/respostas"
   const reason = (location.state as { reason?: string } | null)?.reason
+
+  useEffect(() => {
+    if (!authLoading && session && isAllowedTeamUser) {
+      navigate(from, { replace: true })
+    }
+  }, [session, isAllowedTeamUser, authLoading, navigate, from])
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -32,7 +42,7 @@ export function LoginPage() {
       return
     }
 
-    navigate("/respostas", { replace: true })
+    navigate(from, { replace: true })
   }
 
   return (
