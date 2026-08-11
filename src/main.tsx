@@ -15,6 +15,17 @@ import { PerformancePage } from './pages/performance'
 import { AuditoriaPage } from './pages/auditoria'
 import { CampaignRoiPage } from './pages/campaign-roi'
 import { LeadDetailPage } from './pages/lead-detail'
+import { DashboardPage } from './pages/dashboard'
+import { UsuariosPage } from './pages/usuarios'
+import { ConquistasPage } from './pages/conquistas'
+import { ExerciciosPage } from './pages/exercicios'
+import { ProtocolosPage } from './pages/protocolos'
+import { BannersPage } from './pages/banners'
+import { RegrasPage } from './pages/regras'
+import { LiberarUsuarioPage } from './pages/liberar-usuario'
+import { ConfiguracoesPage } from './pages/configuracoes'
+import { RelatoriosPage } from './pages/relatorios'
+import { AvaliacaoPage } from './pages/avaliacao'
 import { LoginPage } from './pages/login'
 import { ForgotPasswordPage } from './pages/forgot-password'
 import { ResetPasswordPage } from './pages/reset-password'
@@ -57,6 +68,50 @@ const router = createBrowserRouter([
       {
         path: 'lead/:id',
         element: <LeadDetailPage />
+      },
+      {
+        path: 'crm/dashboard',
+        element: <DashboardPage />
+      },
+      {
+        path: 'crm/usuarios',
+        element: <UsuariosPage />
+      },
+      {
+        path: 'crm/avaliacao',
+        element: <AvaliacaoPage />
+      },
+      {
+        path: 'crm/conquistas',
+        element: <ConquistasPage />
+      },
+      {
+        path: 'crm/exercicios',
+        element: <ExerciciosPage />
+      },
+      {
+        path: 'crm/protocolos',
+        element: <ProtocolosPage />
+      },
+      {
+        path: 'crm/banners',
+        element: <BannersPage />
+      },
+      {
+        path: 'crm/regras',
+        element: <RegrasPage />
+      },
+      {
+        path: 'crm/liberar-usuario',
+        element: <LiberarUsuarioPage />
+      },
+      {
+        path: 'crm/configuracoes',
+        element: <ConfiguracoesPage />
+      },
+      {
+        path: 'crm/relatorios',
+        element: <RelatoriosPage />
       }
     ]
   },

@@ -1,4 +1,4 @@
-import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut } from "lucide-react"
+import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, Trophy, ImageIcon, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, PieChart, Users, LayoutDashboard, GraduationCap } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router-dom"
 import { supabase } from "@/lib/supabase"
 
@@ -41,6 +41,61 @@ const items = [
     title: "Auditoria de Leads",
     url: "/auditoria",
     icon: ShieldCheck,
+  },
+  {
+    title: "Dashboard",
+    url: "/crm/dashboard",
+    icon: LayoutDashboard,
+  },
+  {
+    title: "Usuários",
+    url: "/crm/usuarios",
+    icon: Users,
+  },
+  {
+    title: "Protocolos",
+    url: "/crm/protocolos",
+    icon: ClipboardList,
+  },
+  {
+    title: "Exercícios",
+    url: "/crm/exercicios",
+    icon: Dumbbell,
+  },
+  {
+    title: "Avaliação",
+    url: "/crm/avaliacao",
+    icon: GraduationCap,
+  },
+  {
+    title: "Conquistas",
+    url: "/crm/conquistas",
+    icon: Trophy,
+  },
+  {
+    title: "Banners",
+    url: "/crm/banners",
+    icon: ImageIcon,
+  },
+  {
+    title: "Regras",
+    url: "/crm/regras",
+    icon: ListChecks,
+  },
+  {
+    title: "Liberar usuário",
+    url: "/crm/liberar-usuario",
+    icon: UserPlus,
+  },
+  {
+    title: "Configurações",
+    url: "/crm/configuracoes",
+    icon: Settings,
+  },
+  {
+    title: "Relatórios",
+    url: "/crm/relatorios",
+    icon: PieChart,
   },
 ]
 
