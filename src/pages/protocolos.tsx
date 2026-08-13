@@ -1211,7 +1211,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                         title={exercise.nome}
                                         metadata={[
                                           `${exercise.series ?? 0} séries`,
-                                          `${exercise.repsOuDuracao} reps`,
+                                          exercise.repsOuDuracao,
                                           `${exercise.descansoSegundos}s descanso`,
                                         ]}
                                         draggable
@@ -1432,7 +1432,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                           title={exercise.nome}
                                           metadata={[
                                             `${exercise.series ?? 0} séries`,
-                                            `${exercise.repsOuDuracao} reps`,
+                                            exercise.repsOuDuracao,
                                             `${exercise.descansoSegundos}s descanso`,
                                           ]}
                                           draggable
