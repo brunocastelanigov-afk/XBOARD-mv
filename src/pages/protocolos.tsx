@@ -36,9 +36,20 @@ import { Textarea } from "@/components/atoms/textarea"
 import { EntityCard } from "@/components/composites/entity-card"
 import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
+import { LinkedEntitySearchList, type LinkedEntitySearchItem } from "@/components/composites/linked-entity-search-list"
+import { ReorderableListItem } from "@/components/composites/reorderable-list-item"
 import { StatTile } from "@/components/composites/stat-tile"
 import { WizardTabs } from "@/components/composites/wizard-tabs"
 import { adminMutation, adminRpc } from "@/lib/admin-crm-api"
+
+function youtubeEmbedUrl(url: string): string | null {
+  const trimmed = url.trim()
+  if (!trimmed) return null
+  const match = trimmed.match(
+    /(?:youtube\.com\/(?:watch\?v=|shorts\/|embed\/)|youtu\.be\/)([a-zA-Z0-9_-]{6,})/
+  )
+  return match ? `https://www.youtube.com/embed/${match[1]}` : null
+}
 
 type TopTab = "protocolos" | "treinos"
 type NivelApi = "iniciante" | "avancado"
@@ -350,7 +361,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   const [planoFilter, setPlanoFilter] = useState(PLANO_FILTER_ALL)
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [exerciseCatalogFull, setExerciseCatalogFull] = useState<AdminExerciseCatalogRow[]>([])
-  const [exercisePickerKey, setExercisePickerKey] = useState<string | null>(null)
+  const [expandedProgramExerciseKey, setExpandedProgramExerciseKey] = useState<string | null>(null)
   const [exercisePickerQuery, setExercisePickerQuery] = useState("")
 
   const exerciseCatalog = useMemo(() => exerciseCatalogFromTemplates(templates), [templates])
@@ -474,7 +485,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setModalError(null)
     setSaveState("idle")
     setModalMode("program")
-    setExercisePickerKey(null)
+    setExpandedProgramExerciseKey(null)
     try {
       const [rows] = await Promise.all([
         adminRpc<ProgramDetailRow[]>("admin_user_program_detail", { p_user_id: student.user_id }),
@@ -517,7 +528,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setProgramFormState(null)
     setSaveState("idle")
     setModalError(null)
-    setExercisePickerKey(null)
+    setExpandedProgramExerciseKey(null)
     setExercisePickerQuery("")
   }
 
@@ -713,10 +724,23 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     )
   }
 
-  function selectProgramExercise(dayIndex: number, exerciseIndex: number, option: AdminExerciseCatalogRow) {
+  function selectProgramExercise(dayIndex: number, exerciseIndex: number, option: { exercise_id: string; nome: string }) {
     updateProgramExercise(dayIndex, exerciseIndex, { exerciseId: option.exercise_id, nome: option.nome })
-    setExercisePickerKey(null)
     setExercisePickerQuery("")
+  }
+
+  function exerciseCatalogToSearchGroups(catalog: AdminExerciseCatalogRow[], query: string) {
+    const grouped = new Map<string, LinkedEntitySearchItem[]>()
+    const normalizedQuery = query.trim().toLowerCase()
+    for (const option of catalog) {
+      if (normalizedQuery && !option.nome.toLowerCase().includes(normalizedQuery)) continue
+      const items = grouped.get(option.grupo_muscular) ?? []
+      items.push({ id: option.exercise_id, label: option.nome })
+      grouped.set(option.grupo_muscular, items)
+    }
+    return [...grouped.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([label, items]) => ({ label, items }))
   }
 
   async function handleSaveProtocolo() {
@@ -1199,180 +1223,226 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
             ) : (
               <>
                 <p className="text-sm text-muted-foreground">{programFormState.email}</p>
-                {programFormState.days.map((day, dayIndex) => (
-                  <Card key={day.workoutDayId}>
-                    <CardContent className="space-y-3 p-4">
-                      <label className="block space-y-1.5">
-                        <span className="text-sm font-medium">Nome do treino</span>
-                        <Input
-                          value={day.nome}
-                          onChange={(event) => updateProgramDay(dayIndex, { nome: event.target.value })}
-                          placeholder="Nome do treino"
-                        />
-                      </label>
-                      <label className="block space-y-1.5">
-                        <span className="text-sm font-medium">Foco</span>
-                        <Input
-                          value={day.foco}
-                          onChange={(event) => updateProgramDay(dayIndex, { foco: event.target.value })}
-                          placeholder="Foco"
-                        />
-                      </label>
-                      <label className="block space-y-1.5">
-                        <span className="text-sm font-medium">Imagem do treino (opcional)</span>
-                        <Input
-                          value={day.imagemUrl}
-                          onChange={(event) => updateProgramDay(dayIndex, { imagemUrl: event.target.value })}
-                          placeholder="https://..."
-                        />
-                      </label>
-
-                      <div className="flex items-center justify-between gap-3 pt-2">
-                        <h4 className="text-sm font-semibold">Exercícios</h4>
-                        <Button type="button" variant="outline" size="sm" onClick={() => addProgramExercise(dayIndex)}>
-                          Adicionar exercício
-                        </Button>
+                {programFormState.days.map((day, dayIndex) => {
+                  return (
+                    <div key={day.workoutDayId} className="space-y-3">
+                      <div className="flex items-center gap-2 px-1">
+                        <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
+                          {dayIndex + 1}
+                        </span>
+                        <p className="text-sm font-medium">
+                          {day.nome}
+                          <span className="ml-1 text-xs font-normal text-muted-foreground">
+                            {day.foco || "Sem foco"} · {day.exercicios.length} exercício(s)
+                          </span>
+                        </p>
                       </div>
 
-                      {day.exercicios.map((exercise, exerciseIndex) => {
-                        const pickerKey = `${dayIndex}-${exerciseIndex}`
-                        const isPickerOpen = exercisePickerKey === pickerKey
-                        const filteredCatalog = exerciseCatalogFull.filter((option) =>
-                          `${option.nome} ${option.grupo_muscular}`
-                            .toLowerCase()
-                            .includes(exercisePickerQuery.trim().toLowerCase())
-                        )
-                        return (
-                          <div key={pickerKey} className="space-y-3 rounded-md border border-border p-3">
-                            <div className="flex items-start justify-between gap-3">
-                              <div className="flex items-center gap-2">
-                                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
-                                  {exercise.ordem}
-                                </span>
-                                <span className="text-sm font-semibold">{exercise.nome}</span>
-                              </div>
-                              <div className="flex items-center gap-2">
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => {
-                                    setExercisePickerKey(isPickerOpen ? null : pickerKey)
-                                    setExercisePickerQuery("")
-                                  }}
-                                >
-                                  Trocar exercício
-                                </Button>
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => removeProgramExercise(dayIndex, exerciseIndex)}
-                                  aria-label="Remover exercício"
-                                >
-                                  <Trash2 />
-                                </Button>
-                              </div>
-                            </div>
-
-                            {isPickerOpen && (
-                              <div className="space-y-2 rounded-md border border-border bg-muted/20 p-2">
-                                <SearchInput
-                                  value={exercisePickerQuery}
-                                  onChange={setExercisePickerQuery}
-                                  placeholder="Buscar exercício cadastrado..."
-                                />
-                                <div className="max-h-48 space-y-1 overflow-y-auto">
-                                  {filteredCatalog.length === 0 ? (
-                                    <p className="p-2 text-sm text-muted-foreground">Nenhum exercício encontrado.</p>
-                                  ) : (
-                                    filteredCatalog.slice(0, 30).map((option) => (
-                                      <button
-                                        key={option.exercise_id}
-                                        type="button"
-                                        className="block w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
-                                        onClick={() => selectProgramExercise(dayIndex, exerciseIndex, option)}
-                                      >
-                                        <span className="block font-medium">{option.nome}</span>
-                                        <span className="block text-xs text-muted-foreground">{option.grupo_muscular}</span>
-                                      </button>
-                                    ))
-                                  )}
-                                </div>
-                              </div>
-                            )}
-
-                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                              <label className="block space-y-1.5">
-                                <span className="text-xs text-muted-foreground">Séries</span>
-                                <StepperInput
-                                  value={exercise.series ?? 0}
-                                  min={0}
-                                  onChange={(value) =>
-                                    updateProgramExercise(dayIndex, exerciseIndex, { series: value || null })
-                                  }
-                                />
-                              </label>
-                              <label className="block space-y-1.5">
-                                <span className="text-xs text-muted-foreground">Reps/duração</span>
-                                <Input
-                                  value={exercise.repsOuDuracao}
-                                  onChange={(event) =>
-                                    updateProgramExercise(dayIndex, exerciseIndex, { repsOuDuracao: event.target.value })
-                                  }
-                                  placeholder="Reps/duração"
-                                />
-                              </label>
-                              <label className="block space-y-1.5">
-                                <span className="text-xs text-muted-foreground">Descanso (s)</span>
-                                <StepperInput
-                                  value={exercise.descansoSegundos}
-                                  min={0}
-                                  onChange={(value) =>
-                                    updateProgramExercise(dayIndex, exerciseIndex, { descansoSegundos: value })
-                                  }
-                                />
-                              </label>
-                            </div>
-
+                      <Card className="ml-4 rounded-lg border-border">
+                        <CardContent className="space-y-4 p-4">
                             <label className="block space-y-1.5">
-                              <span className="text-xs text-muted-foreground">Vídeo do exercício (opcional)</span>
+                              <span className="text-xs font-medium uppercase text-muted-foreground">Nome do treino</span>
                               <Input
-                                value={exercise.videoUrlOverride}
-                                onChange={(event) =>
-                                  updateProgramExercise(dayIndex, exerciseIndex, { videoUrlOverride: event.target.value })
-                                }
+                                value={day.nome}
+                                onChange={(event) => updateProgramDay(dayIndex, { nome: event.target.value })}
+                                placeholder="Nome do treino"
+                              />
+                            </label>
+                            <label className="block space-y-1.5">
+                              <span className="text-xs font-medium uppercase text-muted-foreground">Foco</span>
+                              <Input
+                                value={day.foco}
+                                onChange={(event) => updateProgramDay(dayIndex, { foco: event.target.value })}
+                                placeholder="Foco"
+                              />
+                            </label>
+                            <label className="block space-y-1.5">
+                              <span className="text-xs font-medium uppercase text-muted-foreground">
+                                Imagem do treino (opcional)
+                              </span>
+                              <Input
+                                value={day.imagemUrl}
+                                onChange={(event) => updateProgramDay(dayIndex, { imagemUrl: event.target.value })}
                                 placeholder="https://..."
                               />
+                              {day.imagemUrl.trim() && (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={day.imagemUrl}
+                                  alt=""
+                                  className="h-24 w-full rounded-md border border-border object-cover"
+                                />
+                              )}
                             </label>
-                            <label className="block space-y-1.5">
-                              <span className="text-xs text-muted-foreground">Como executar (opcional)</span>
-                              <Textarea
-                                value={exercise.instrucaoTextoOverride}
-                                onChange={(event) =>
-                                  updateProgramExercise(dayIndex, exerciseIndex, {
-                                    instrucaoTextoOverride: event.target.value,
-                                  })
-                                }
-                                placeholder="Como executar (opcional)"
-                              />
-                            </label>
-                            <label className="block space-y-1.5">
-                              <span className="text-xs text-muted-foreground">Observações e cuidados (opcional)</span>
-                              <Textarea
-                                value={exercise.observacoes}
-                                onChange={(event) =>
-                                  updateProgramExercise(dayIndex, exerciseIndex, { observacoes: event.target.value })
-                                }
-                                placeholder="Observações e cuidados (opcional)"
-                              />
-                            </label>
-                          </div>
-                        )
-                      })}
-                    </CardContent>
-                  </Card>
-                ))}
+
+                            <div className="space-y-2 border-t border-border pt-3">
+                              <div className="flex items-center justify-between">
+                                <p className="text-sm font-medium">
+                                  Exercícios
+                                  <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                    {day.exercicios.length} item(ns) na ordem de execução
+                                  </span>
+                                </p>
+                                <Button type="button" variant="outline" size="sm" onClick={() => addProgramExercise(dayIndex)}>
+                                  <Plus />
+                                  Adicionar
+                                </Button>
+                              </div>
+
+                              {day.exercicios.length === 0 ? (
+                                <EmptyState message="Nenhum exercício adicionado a este treino ainda." />
+                              ) : (
+                                <div className="space-y-2">
+                                  {day.exercicios.map((exercise, exerciseIndex) => {
+                                    const exerciseKey = `${dayIndex}-${exerciseIndex}`
+                                    const exerciseExpanded = expandedProgramExerciseKey === exerciseKey
+                                    const embedUrl = youtubeEmbedUrl(exercise.videoUrlOverride)
+                                    return (
+                                      <div key={exerciseKey} className="space-y-2">
+                                        <ReorderableListItem
+                                          order={exercise.ordem}
+                                          title={exercise.nome}
+                                          metadata={[
+                                            `${exercise.series ?? 0} séries`,
+                                            `${exercise.repsOuDuracao} reps`,
+                                            `${exercise.descansoSegundos}s descanso`,
+                                          ]}
+                                          draggable
+                                          onRemove={() => removeProgramExercise(dayIndex, exerciseIndex)}
+                                          onExpand={() => {
+                                            setExpandedProgramExerciseKey(exerciseExpanded ? null : exerciseKey)
+                                            setExercisePickerQuery("")
+                                          }}
+                                        />
+
+                                        {exerciseExpanded && (
+                                          <Card className="ml-4 rounded-lg border-border">
+                                            <CardContent className="space-y-4 p-4">
+                                              <div className="space-y-1.5">
+                                                <p className="text-xs font-medium uppercase text-muted-foreground">
+                                                  Buscar exercício cadastrado...
+                                                </p>
+                                                <LinkedEntitySearchList
+                                                  query={exercisePickerQuery}
+                                                  onQueryChange={setExercisePickerQuery}
+                                                  groups={exerciseCatalogToSearchGroups(exerciseCatalogFull, exercisePickerQuery)}
+                                                  onSelect={(item) =>
+                                                    selectProgramExercise(dayIndex, exerciseIndex, {
+                                                      exercise_id: item.id,
+                                                      nome: item.label,
+                                                    })
+                                                  }
+                                                />
+                                              </div>
+
+                                              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                                <label className="block space-y-1.5">
+                                                  <span className="text-xs font-medium uppercase text-muted-foreground">Séries</span>
+                                                  <StepperInput
+                                                    value={exercise.series ?? 0}
+                                                    min={0}
+                                                    onChange={(value) =>
+                                                      updateProgramExercise(dayIndex, exerciseIndex, { series: value || null })
+                                                    }
+                                                  />
+                                                </label>
+                                                <label className="block space-y-1.5">
+                                                  <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                    Reps/duração
+                                                  </span>
+                                                  <Input
+                                                    value={exercise.repsOuDuracao}
+                                                    onChange={(event) =>
+                                                      updateProgramExercise(dayIndex, exerciseIndex, {
+                                                        repsOuDuracao: event.target.value,
+                                                      })
+                                                    }
+                                                    placeholder="Reps/duração"
+                                                  />
+                                                </label>
+                                                <label className="block space-y-1.5">
+                                                  <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                    Descanso (s)
+                                                  </span>
+                                                  <StepperInput
+                                                    value={exercise.descansoSegundos}
+                                                    min={0}
+                                                    onChange={(value) =>
+                                                      updateProgramExercise(dayIndex, exerciseIndex, { descansoSegundos: value })
+                                                    }
+                                                  />
+                                                </label>
+                                              </div>
+
+                                              <div className="space-y-1.5">
+                                                <p className="text-xs font-medium uppercase text-muted-foreground">
+                                                  Vídeo do exercício (opcional)
+                                                </p>
+                                                <p className="text-xs text-muted-foreground">
+                                                  Cole um link do YouTube ou qualquer URL de vídeo. No app, ele aparece
+                                                  dentro da tela do exercício.
+                                                </p>
+                                                <Input
+                                                  value={exercise.videoUrlOverride}
+                                                  onChange={(event) =>
+                                                    updateProgramExercise(dayIndex, exerciseIndex, {
+                                                      videoUrlOverride: event.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="https://..."
+                                                />
+                                                {embedUrl ? (
+                                                  <div className="aspect-video overflow-hidden rounded-lg border border-border bg-muted">
+                                                    <iframe
+                                                      src={embedUrl}
+                                                      className="h-full w-full"
+                                                      allowFullScreen
+                                                      title="Preview do vídeo"
+                                                    />
+                                                  </div>
+                                                ) : null}
+                                              </div>
+
+                                              <label className="block space-y-1.5">
+                                                <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                  Como executar (opcional)
+                                                </span>
+                                                <Textarea
+                                                  value={exercise.instrucaoTextoOverride}
+                                                  onChange={(event) =>
+                                                    updateProgramExercise(dayIndex, exerciseIndex, {
+                                                      instrucaoTextoOverride: event.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="Como executar (opcional)"
+                                                />
+                                              </label>
+                                              <label className="block space-y-1.5">
+                                                <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                  Observações e cuidados (opcional)
+                                                </span>
+                                                <Textarea
+                                                  value={exercise.observacoes}
+                                                  onChange={(event) =>
+                                                    updateProgramExercise(dayIndex, exerciseIndex, { observacoes: event.target.value })
+                                                  }
+                                                  placeholder="Observações e cuidados (opcional)"
+                                                />
+                                              </label>
+                                            </CardContent>
+                                          </Card>
+                                        )}
+                                      </div>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  )
+                })}
               </>
             )}
           </div>
