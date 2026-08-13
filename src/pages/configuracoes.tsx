@@ -1,48 +1,115 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { Check, Loader2 } from "lucide-react"
+import { Check, Loader2, Package } from "lucide-react"
 
 import { Button } from "@/components/atoms/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/atoms/card"
+import { EmptyState } from "@/components/atoms/empty-state"
 import { Input } from "@/components/atoms/input"
 import { Skeleton } from "@/components/atoms/skeleton"
 import { StepperInput } from "@/components/atoms/stepper-input"
 import { ApplyValueCard, type ApplyValueCardApplyState } from "@/components/composites/apply-value-card"
+import { EntityCard } from "@/components/composites/entity-card"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
+import { adminMutation, adminRpc } from "@/lib/admin-crm-api"
 import { cn } from "@/lib/utils"
 
 type SaveState = "idle" | "saving" | "saved"
 
+interface AdminAppSettingsRow {
+  app_name: string
+  trinca_product_ids: string[]
+  elite_product_ids: string[]
+  trinca_validity_days: number
+  elite_validity_days: number
+  upgrade_url: string | null
+  renewal_trinca_url: string | null
+  renewal_elite_url: string | null
+  support_url: string | null
+  reassessment_days: number
+  depends_on_future_table: boolean
+  blocked_by: string | null
+}
+
+interface AdminLastlinkProductMapRow {
+  product_id: string
+  tier: "mvp" | "elite"
+  is_upsell: boolean
+  label: string | null
+}
+
+interface AdminSettingsMutationResponse {
+  upgradeUrl: string | null
+  renewalTrincaUrl: string | null
+  renewalEliteUrl: string | null
+  supportUrl: string | null
+  trincaValidityDays: number
+  eliteValidityDays: number
+  updatedAt: string
+}
+
+interface AdminReassessmentResponse {
+  reassessmentDays: number
+  updatedAt: string
+}
+
+interface AdminLastlinkProductMapResponse {
+  productId: string
+  tier: "mvp" | "elite"
+  isUpsell: boolean
+  label: string | null
+}
+
 interface ConfiguracoesFormState {
   appName: string
-  productIdsTrinca: string
-  productIdsElite: string
   upgradeLink: string
   validadeTrincaDias: number
   validadeEliteDias: number
   renewLinkTrinca: string
   renewLinkElite: string
   supportLink: string
-  supportWhatsapp: string
-  supportEmail: string
 }
 
-const MOCK_CONFIG: ConfiguracoesFormState = {
-  appName: "Treino Trinca",
-  productIdsTrinca: "ae6ef3ee-3cff-4064-a0d7-0dcf31707b10,0ca58092-d29c-491b-a581-95a4e9d3c2f0",
-  productIdsElite: "3afc8063-0bb9-4f1d-a2d3-7d69a976bda4,c2450419-c9c7-4ce1-39aa-c9d8f21a7b60",
-  upgradeLink: "https://lastlink.com/p/C0AEA4904/checkout-payment?cp=CASHBACKD10OFF",
-  validadeTrincaDias: 365,
-  validadeEliteDias: 90,
-  renewLinkTrinca: "https://checkout-trinca.lastlink.com/renew",
-  renewLinkElite: "https://lastlink.com/p/C0AEA4904/checkout-payment?cp=CASHBACKD10OFF",
-  supportLink: "https://pedrolotz.site/suporte-trinca",
-  supportWhatsapp: "5511999999999",
-  supportEmail: "suporte@app.com",
+const emptyForm: ConfiguracoesFormState = {
+  appName: "",
+  upgradeLink: "",
+  validadeTrincaDias: 1,
+  validadeEliteDias: 1,
+  renewLinkTrinca: "",
+  renewLinkElite: "",
+  supportLink: "",
 }
 
-const MOCK_REAVALIACAO_DIAS = 45
-const MOCK_LAST_APPLIED_TEXT = "Último prazo global aplicado em 14/05/2026, 02:11 (45 dias)"
+const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
+  dateStyle: "short",
+  timeStyle: "short",
+})
+
+function settingsToForm(settings: AdminAppSettingsRow): ConfiguracoesFormState {
+  return {
+    appName: settings.app_name,
+    upgradeLink: settings.upgrade_url ?? "",
+    validadeTrincaDias: settings.trinca_validity_days,
+    validadeEliteDias: settings.elite_validity_days,
+    renewLinkTrinca: settings.renewal_trinca_url ?? "",
+    renewLinkElite: settings.renewal_elite_url ?? "",
+    supportLink: settings.support_url ?? "",
+  }
+}
+
+function productTitle(product: AdminLastlinkProductMapRow) {
+  const tier = product.tier === "elite" ? "Elite" : "Trinca"
+  return `${tier}${product.is_upsell ? " upsell" : ""}`
+}
+
+function nullableUrl(value: string) {
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function errorMessage(error: unknown, fallback: string) {
+  return error instanceof Error ? error.message : fallback
+}
 
 interface ConfiguracoesPageProps {
   canEdit?: boolean
@@ -52,62 +119,160 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
   const [searchParams] = useSearchParams()
   const canEdit = canEditProp ?? searchParams.get("canEdit") !== "false"
   const forceLoading = searchParams.get("loading") === "1"
+  const forceEmpty = searchParams.get("empty") === "1"
 
   const [loading, setLoading] = useState(true)
-  const [form, setForm] = useState<ConfiguracoesFormState>(MOCK_CONFIG)
-  const [reavaliacaoDias, setReavaliacaoDias] = useState(String(MOCK_REAVALIACAO_DIAS))
-  const [lastAppliedText, setLastAppliedText] = useState(MOCK_LAST_APPLIED_TEXT)
+  const [error, setError] = useState<string | null>(null)
+  const [form, setForm] = useState<ConfiguracoesFormState>(emptyForm)
+  const [products, setProducts] = useState<AdminLastlinkProductMapRow[]>([])
+  const [reavaliacaoDias, setReavaliacaoDias] = useState("")
+  const [lastAppliedText, setLastAppliedText] = useState<string | undefined>()
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [applyState, setApplyState] = useState<ApplyValueCardApplyState>("idle")
+  const [savingProductId, setSavingProductId] = useState<string | null>(null)
+
+  async function loadSettings() {
+    setLoading(true)
+    setError(null)
+
+    try {
+      const [settingsRows, productRows] = await Promise.all([
+        adminRpc<AdminAppSettingsRow[]>("admin_app_settings_current"),
+        adminRpc<AdminLastlinkProductMapRow[]>("admin_lastlink_product_map"),
+      ])
+
+      const settings = settingsRows[0]
+      if (!settings) throw new Error("Contrato admin_app_settings_current retornou vazio.")
+
+      setForm(settingsToForm(settings))
+      setProducts(productRows)
+      setReavaliacaoDias(String(settings.reassessment_days))
+      setLastAppliedText(`Prazo global atual: ${settings.reassessment_days} dia(s)`)
+    } catch (loadError) {
+      setError(errorMessage(loadError, "Erro ao carregar configurações."))
+      setProducts([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (forceLoading) return
-    const timeout = setTimeout(() => setLoading(false), 700)
-    return () => clearTimeout(timeout)
+    void loadSettings()
   }, [forceLoading])
 
-  const pendingTimeouts = useRef<ReturnType<typeof setTimeout>[]>([])
-
-  useEffect(() => {
-    return () => {
-      pendingTimeouts.current.forEach(clearTimeout)
-    }
-  }, [])
-
-  function runAfter(delay: number, callback: () => void) {
-    const id = setTimeout(callback, delay)
-    pendingTimeouts.current.push(id)
-  }
-
   const isLoading = forceLoading || loading
+  const visibleProducts = forceEmpty ? [] : products
+
+  const groupedProducts = useMemo(() => {
+    return {
+      trinca: visibleProducts.filter((product) => product.tier === "mvp"),
+      elite: visibleProducts.filter((product) => product.tier === "elite"),
+    }
+  }, [visibleProducts])
 
   function updateField<K extends keyof ConfiguracoesFormState>(key: K, value: ConfiguracoesFormState[K]) {
     setForm((current) => ({ ...current, [key]: value }))
   }
 
-  function handleSave(event: React.FormEvent) {
+  async function handleSave(event: React.FormEvent) {
     event.preventDefault()
     if (saveState !== "idle") return
+
     setSaveState("saving")
-    runAfter(900, () => {
+    setError(null)
+
+    try {
+      const saved = await adminMutation<AdminSettingsMutationResponse>("/admin/settings", {
+        method: "PATCH",
+        body: {
+          upgradeUrl: nullableUrl(form.upgradeLink),
+          renewalTrincaUrl: nullableUrl(form.renewLinkTrinca),
+          renewalEliteUrl: nullableUrl(form.renewLinkElite),
+          supportUrl: nullableUrl(form.supportLink),
+          trincaValidityDays: form.validadeTrincaDias,
+          eliteValidityDays: form.validadeEliteDias,
+        },
+      })
+
+      setForm((current) => ({
+        ...current,
+        upgradeLink: saved.upgradeUrl ?? "",
+        renewLinkTrinca: saved.renewalTrincaUrl ?? "",
+        renewLinkElite: saved.renewalEliteUrl ?? "",
+        supportLink: saved.supportUrl ?? "",
+        validadeTrincaDias: saved.trincaValidityDays,
+        validadeEliteDias: saved.eliteValidityDays,
+      }))
       setSaveState("saved")
-      runAfter(1600, () => setSaveState("idle"))
-    })
+    } catch (saveError) {
+      setError(errorMessage(saveError, "Erro ao salvar configurações."))
+      setSaveState("idle")
+    }
   }
 
-  function handleApplyReavaliacao() {
+  async function handleApplyReavaliacao() {
     if (applyState !== "idle") return
+
     const days = Number(reavaliacaoDias)
-    if (!Number.isFinite(days)) return
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      setError("Informe um prazo de reavaliação entre 1 e 365 dias.")
+      return
+    }
+
     setApplyState("loading")
-    runAfter(900, () => {
-      const now = new Date()
-      const formattedDate = now.toLocaleDateString("pt-BR")
-      const formattedTime = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-      setLastAppliedText(`Último prazo global aplicado em ${formattedDate}, ${formattedTime} (${days} dias)`)
+    setError(null)
+
+    try {
+      const response = await adminMutation<AdminReassessmentResponse>("/admin/settings/reassessment", {
+        method: "PATCH",
+        body: { reassessmentDays: days },
+      })
+      setReavaliacaoDias(String(response.reassessmentDays))
+      setLastAppliedText(
+        `Último prazo global aplicado em ${dateTimeFormatter.format(new Date(response.updatedAt))} (${response.reassessmentDays} dias)`
+      )
       setApplyState("success")
-      runAfter(1600, () => setApplyState("idle"))
-    })
+    } catch (applyError) {
+      setError(errorMessage(applyError, "Erro ao aplicar reavaliação."))
+      setApplyState("idle")
+    }
+  }
+
+  async function handleProductLabelChange(productId: string, label: string) {
+    setProducts((current) =>
+      current.map((product) => (product.product_id === productId ? { ...product, label } : product))
+    )
+  }
+
+  async function handleSaveProduct(product: AdminLastlinkProductMapRow) {
+    if (savingProductId) return
+    const label = product.label?.trim() ?? ""
+    if (!label) {
+      setError("Informe um label para o produto LastLink.")
+      return
+    }
+
+    setSavingProductId(product.product_id)
+    setError(null)
+
+    try {
+      const saved = await adminMutation<AdminLastlinkProductMapResponse>(
+        `/admin/lastlink-product-map/${encodeURIComponent(product.product_id)}`,
+        { method: "PATCH", body: { label } }
+      )
+      setProducts((current) =>
+        current.map((item) =>
+          item.product_id === saved.productId
+            ? { product_id: saved.productId, tier: saved.tier, is_upsell: saved.isUpsell, label: saved.label }
+            : item
+        )
+      )
+    } catch (productError) {
+      setError(errorMessage(productError, "Erro ao salvar produto LastLink."))
+    } finally {
+      setSavingProductId(null)
+    }
   }
 
   return (
@@ -116,7 +281,12 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
         <EntityListHeader title="Configurações" className="items-start" />
         <p className="-mt-4 text-sm text-muted-foreground">Configurações gerais do sistema</p>
 
-        {/* B — Informações do App */}
+        {error && (
+          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
         <Card className="border border-border shadow-sm">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-base">Informações do App</CardTitle>
@@ -130,17 +300,12 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
             ) : (
               <label className="block space-y-2">
                 <span className="text-sm font-medium">Nome do app</span>
-                <Input
-                  value={form.appName}
-                  disabled={!canEdit}
-                  onChange={(event) => updateField("appName", event.target.value)}
-                />
+                <Input value={form.appName} disabled />
               </label>
             )}
           </CardContent>
         </Card>
 
-        {/* C — Funil, produtos e Elite */}
         <Card className="border border-border shadow-sm">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-base">Funil, produtos e Elite</CardTitle>
@@ -157,22 +322,10 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
               </div>
             ) : (
               <>
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium">ID(s) do produto Treino Trinca</span>
-                  <Input
-                    value={form.productIdsTrinca}
-                    disabled={!canEdit}
-                    onChange={(event) => updateField("productIdsTrinca", event.target.value)}
-                  />
-                </label>
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium">ID(s) do produto Trinca Elite</span>
-                  <Input
-                    value={form.productIdsElite}
-                    disabled={!canEdit}
-                    onChange={(event) => updateField("productIdsElite", event.target.value)}
-                  />
-                </label>
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  <ProductGroup title="Produtos Treino Trinca" products={groupedProducts.trinca} />
+                  <ProductGroup title="Produtos Trinca Elite" products={groupedProducts.elite} />
+                </div>
                 <label className="block space-y-2">
                   <span className="text-sm font-medium">Link de upgrade para o Elite</span>
                   <Input
@@ -180,16 +333,14 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
                     disabled={!canEdit}
                     onChange={(event) => updateField("upgradeLink", event.target.value)}
                   />
-                  <p className="text-xs text-muted-foreground">
-                    Usado no botão "Conhecer o Elite" dentro do app.
-                  </p>
+                  <p className="text-xs text-muted-foreground">Usado no botão "Conhecer o Elite" dentro do app.</p>
                 </label>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <label className="block space-y-2">
                     <span className="text-sm font-medium">Validade Trinca (dias)</span>
                     <StepperInput
                       value={form.validadeTrincaDias}
-                      min={0}
+                      min={1}
                       disabled={!canEdit}
                       onChange={(value) => updateField("validadeTrincaDias", value)}
                     />
@@ -198,7 +349,7 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
                     <span className="text-sm font-medium">Validade Elite (dias)</span>
                     <StepperInput
                       value={form.validadeEliteDias}
-                      min={0}
+                      min={1}
                       disabled={!canEdit}
                       onChange={(value) => updateField("validadeEliteDias", value)}
                     />
@@ -225,51 +376,73 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
           </CardContent>
         </Card>
 
-        {/* D — Suporte */}
+        <Card className="border border-border shadow-sm">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-base">Mapa LastLink</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3 p-4 pt-0">
+            {isLoading ? (
+              <div className="space-y-3">
+                {Array.from({ length: 3 }, (_, index) => (
+                  <Skeleton key={index} className="h-20 w-full rounded-lg" />
+                ))}
+              </div>
+            ) : visibleProducts.length === 0 ? (
+              <EmptyState icon={Package} message="Nenhum produto LastLink encontrado." />
+            ) : (
+              visibleProducts.map((product) => (
+                <EntityCard
+                  key={product.product_id}
+                  title={productTitle(product)}
+                  metadata={[product.product_id]}
+                  badges={[
+                    { label: product.tier === "elite" ? "Elite" : "Trinca", variant: "outline" },
+                    ...(product.is_upsell ? [{ label: "Upsell", variant: "secondary" as const }] : []),
+                  ]}
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Input
+                      value={product.label ?? ""}
+                      disabled={!canEdit}
+                      onChange={(event) => handleProductLabelChange(product.product_id, event.target.value)}
+                    />
+                    {canEdit && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        disabled={savingProductId === product.product_id}
+                        onClick={() => handleSaveProduct(product)}
+                      >
+                        {savingProductId === product.product_id ? "Salvando..." : "Salvar label"}
+                      </Button>
+                    )}
+                  </div>
+                </EntityCard>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
         <Card className="border border-border shadow-sm">
           <CardHeader className="p-4 pb-2">
             <CardTitle className="text-base">Suporte</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4 p-4 pt-0">
             {isLoading ? (
-              <div className="space-y-4">
-                {Array.from({ length: 3 }, (_, index) => (
-                  <div key={index} className="space-y-2">
-                    <Skeleton className="h-4 w-40" />
-                    <Skeleton className="h-8 w-full" />
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-8 w-full" />
               </div>
             ) : (
-              <>
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium">Link de suporte</span>
-                  <Input
-                    value={form.supportLink}
-                    disabled={!canEdit}
-                    onChange={(event) => updateField("supportLink", event.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Esse link será usado no botão de suporte do aplicativo.
-                  </p>
-                </label>
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium">WhatsApp de suporte (opcional)</span>
-                  <Input
-                    value={form.supportWhatsapp}
-                    disabled={!canEdit}
-                    onChange={(event) => updateField("supportWhatsapp", event.target.value)}
-                  />
-                </label>
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium">E-mail de suporte (opcional)</span>
-                  <Input
-                    value={form.supportEmail}
-                    disabled={!canEdit}
-                    onChange={(event) => updateField("supportEmail", event.target.value)}
-                  />
-                </label>
-              </>
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">Link de suporte</span>
+                <Input
+                  value={form.supportLink}
+                  disabled={!canEdit}
+                  onChange={(event) => updateField("supportLink", event.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">Esse link será usado no botão de suporte do aplicativo.</p>
+              </label>
             )}
           </CardContent>
         </Card>
@@ -291,12 +464,11 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
                 Configurações salvas!
               </>
             ) : (
-              "💾 Salvar configurações"
+              "Salvar configurações"
             )}
           </Button>
         )}
 
-        {/* E — Prazo de Reavaliação */}
         {isLoading ? (
           <Card className="border border-border shadow-sm">
             <CardHeader className="p-4 pb-2">
@@ -323,6 +495,25 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
           />
         )}
       </form>
+    </div>
+  )
+}
+
+function ProductGroup({ title, products }: { title: string; products: AdminLastlinkProductMapRow[] }) {
+  return (
+    <div className="rounded-lg border border-border bg-muted/20 p-3">
+      <p className="text-sm font-medium">{title}</p>
+      {products.length === 0 ? (
+        <p className="mt-2 text-xs text-muted-foreground">Nenhum product id neste grupo.</p>
+      ) : (
+        <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
+          {products.map((product) => (
+            <li key={product.product_id} className="break-all">
+              {product.product_id}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   )
 }
