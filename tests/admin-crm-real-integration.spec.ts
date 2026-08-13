@@ -182,10 +182,58 @@ async function mockCommonAdminReads(page: Page) {
   )
 }
 
+async function mockExerciseReads(page: Page) {
+  await page.route("**/rest/v1/rpc/admin_exercises_list*", async (route) => {
+    const body = route.request().postDataJSON() as {
+      p_grupo_muscular?: string
+      p_search_name_prefix?: string
+    } | null
+    const rows = [
+      {
+        exercise_id: "exercise-1",
+        slug: "supino-reto",
+        nome: "Supino reto",
+        grupo_muscular: "Peito",
+        equipamento: "Barra",
+        video_url: "https://youtube.com/shorts/supino",
+        instrucao_texto: "Desça a barra até o peito e suba com controle.",
+        is_active: true,
+        cursor_nome: "Supino reto",
+        cursor_exercise_id: "exercise-1",
+      },
+      {
+        exercise_id: "exercise-2",
+        slug: "puxada-frontal",
+        nome: "Puxada frontal",
+        grupo_muscular: "Costas",
+        equipamento: "Máquina",
+        video_url: null,
+        instrucao_texto: "Puxe a barra mantendo o tronco firme.",
+        is_active: true,
+        cursor_nome: "Puxada frontal",
+        cursor_exercise_id: "exercise-2",
+      },
+    ].filter((row) => {
+      const categoryMatches = !body?.p_grupo_muscular || row.grupo_muscular === body.p_grupo_muscular
+      const searchMatches =
+        !body?.p_search_name_prefix ||
+        row.nome.toLowerCase().startsWith(body.p_search_name_prefix.toLowerCase())
+      return categoryMatches && searchMatches
+    })
+
+    return route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(rows),
+    })
+  })
+}
+
 test.describe("Story 15.6 — integrações reais Admin CRM", () => {
   test.beforeEach(async ({ page }) => {
     await mockCrmSession(page)
     await mockCommonAdminReads(page)
+    await mockExerciseReads(page)
   })
 
   test("Banners usa admin_banners_list e trata 409 real do /admin/banners", async ({ page }) => {
@@ -274,5 +322,117 @@ test.describe("Story 15.6 — integrações reais Admin CRM", () => {
     await page.getByRole("button", { name: "Editar treino" }).click()
     await page.getByRole("button", { name: "Salvar treino" }).click()
     await expect.poll(() => programPatchCalled).toBe(true)
+  })
+
+  test("Exercicios usa admin_exercises_list e mutacoes reais com Idempotency-Key", async ({ page }) => {
+    const mutationHeaders: string[] = []
+    let postCalled = false
+    let patchCalled = false
+    let deleteCalled = false
+
+    await page.route("**/admin/exercises", (route) => {
+      if (route.request().method() !== "POST") return route.fallback()
+      postCalled = true
+      mutationHeaders.push(route.request().headers()["idempotency-key"] ?? "")
+      const body = route.request().postDataJSON() as { nome: string; grupoMuscular: string }
+      expect(body.nome).toBe("Remada curvada")
+      expect(body.grupoMuscular).toBe("Costas")
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          exerciseId: "exercise-3",
+          slug: "remada-curvada",
+          nome: "Remada curvada",
+          grupoMuscular: "Costas",
+          equipamento: "Barra",
+          videoUrl: null,
+          instrucaoTexto: "Puxe a barra em direcao ao tronco.",
+          isActive: true,
+        }),
+      })
+    })
+    await page.route("**/admin/exercises/exercise-1", (route) => {
+      if (route.request().method() === "PATCH") {
+        patchCalled = true
+        mutationHeaders.push(route.request().headers()["idempotency-key"] ?? "")
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            exerciseId: "exercise-1",
+            slug: "supino-reto",
+            nome: "Supino reto ajustado",
+            grupoMuscular: "Peito",
+            equipamento: "Barra",
+            videoUrl: "https://youtube.com/shorts/supino",
+            instrucaoTexto: "Instrucao ajustada.",
+            isActive: true,
+          }),
+        })
+      }
+      if (route.request().method() === "DELETE") {
+        deleteCalled = true
+        mutationHeaders.push(route.request().headers()["idempotency-key"] ?? "")
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            exerciseId: "exercise-1",
+            slug: "supino-reto",
+            nome: "Supino reto ajustado",
+            grupoMuscular: "Peito",
+            equipamento: "Barra",
+            videoUrl: "https://youtube.com/shorts/supino",
+            instrucaoTexto: "Instrucao ajustada.",
+            isActive: false,
+            affectedTemplates: [
+              {
+                templateId: "template-1",
+                nome: "Treino Iniciante - Crescer",
+                nivel: "iniciante",
+                objetivo: "ganhar_musculo",
+                status: "ativo",
+              },
+            ],
+          }),
+        })
+      }
+      return route.fallback()
+    })
+
+    await page.goto("/crm/exercicios")
+    await expect(page.getByText("Supino reto")).toBeVisible()
+    await expect(page.getByText("Puxada frontal")).toBeVisible()
+    await expect(page.getByRole("button", { name: "Peito" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Costas" })).toBeVisible()
+    await expect(page.getByRole("button", { name: "Ombros" })).toHaveCount(0)
+
+    await page.getByRole("button", { name: "Peito" }).click()
+    await expect(page.getByText("Supino reto")).toBeVisible()
+    await expect(page.getByText("Puxada frontal")).toHaveCount(0)
+
+    await page.getByRole("button", { name: /Editar/ }).first().click()
+    await page.getByLabel(/Nome/).fill("Supino reto ajustado")
+    await page.getByRole("button", { name: "Salvar exercício" }).click()
+    await expect(page.getByText("Supino reto ajustado")).toBeVisible()
+
+    await page.getByRole("button", { name: /Inativar "Supino reto ajustado"/ }).click()
+    await page.getByRole("button", { name: "Inativar exercício" }).click()
+    await expect(page.getByText(/Templates afetados: Treino Iniciante - Crescer/)).toBeVisible()
+
+    await page.getByRole("button", { name: "Todos" }).click()
+    await page.getByRole("button", { name: "Novo Exercício" }).click()
+    await page.getByLabel(/Nome/).fill("Remada curvada")
+    await page.getByLabel(/Grupo muscular/).fill("Costas")
+    await page.getByLabel("Equipamento").fill("Barra")
+    await page.getByRole("button", { name: "Salvar exercício" }).click()
+    await expect(page.getByText("Remada curvada")).toBeVisible()
+
+    expect(postCalled).toBe(true)
+    expect(patchCalled).toBe(true)
+    expect(deleteCalled).toBe(true)
+    expect(mutationHeaders).toHaveLength(3)
+    expect(mutationHeaders.every(Boolean)).toBe(true)
   })
 })
