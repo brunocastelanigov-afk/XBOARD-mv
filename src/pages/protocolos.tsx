@@ -102,6 +102,10 @@ interface ProgramExercise {
   reps?: string
   reps_ou_duracao?: string
   descanso_segundos?: number
+  peso_kg?: number | string | null
+  video_url_override?: string | null
+  instrucao_texto_override?: string | null
+  observacoes?: string | null
 }
 
 interface ProgramDayRow {
@@ -110,8 +114,15 @@ interface ProgramDayRow {
   nome: string
   foco: string | null
   status: string
+  imagem_url?: string | null
   exercicios_snapshot: ProgramExercise[] | null
   exercicios: ProgramExercise[]
+}
+
+interface AdminExerciseCatalogRow {
+  exercise_id: string
+  nome: string
+  grupo_muscular: string
 }
 
 interface ProgramDetailRow {
@@ -156,6 +167,7 @@ interface ProgramForm {
     workoutDayId: string
     nome: string
     foco: string
+    imagemUrl: string
     exercicios: {
       ordem: number
       exerciseId: string
@@ -163,6 +175,9 @@ interface ProgramForm {
       series: number | null
       repsOuDuracao: string
       descansoSegundos: number
+      videoUrlOverride: string
+      instrucaoTextoOverride: string
+      observacoes: string
     }[]
   }[]
 }
@@ -271,12 +286,16 @@ function programPayload(form: ProgramForm) {
       workoutDayId: day.workoutDayId,
       nome: day.nome || null,
       foco: day.foco || null,
+      imagemUrl: day.imagemUrl.trim() || null,
       exercicios: day.exercicios.map((exercise) => ({
         ordem: exercise.ordem,
         exerciseId: exercise.exerciseId,
         series: exercise.series,
         repsOuDuracao: exercise.repsOuDuracao,
         descansoSegundos: exercise.descansoSegundos,
+        videoUrlOverride: exercise.videoUrlOverride.trim() || null,
+        instrucaoTextoOverride: exercise.instrucaoTextoOverride.trim() || null,
+        observacoes: exercise.observacoes.trim() || null,
       })),
     })),
   }
@@ -330,9 +349,20 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   const [appliedEmailQuery, setAppliedEmailQuery] = useState("")
   const [planoFilter, setPlanoFilter] = useState(PLANO_FILTER_ALL)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [exerciseCatalogFull, setExerciseCatalogFull] = useState<AdminExerciseCatalogRow[]>([])
+  const [exercisePickerKey, setExercisePickerKey] = useState<string | null>(null)
+  const [exercisePickerQuery, setExercisePickerQuery] = useState("")
 
   const exerciseCatalog = useMemo(() => exerciseCatalogFromTemplates(templates), [templates])
   const defaultExercise = exerciseCatalog[0]
+
+  async function loadExerciseCatalogFull() {
+    const rows = await adminRpc<AdminExerciseCatalogRow[]>("admin_exercises_list", {
+      p_is_active: true,
+      p_limit: 500,
+    })
+    setExerciseCatalogFull(rows)
+  }
 
   async function loadTemplates() {
     const rows = await adminRpc<TemplateRow[]>("admin_protocol_templates_tree", {
@@ -444,10 +474,12 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setModalError(null)
     setSaveState("idle")
     setModalMode("program")
+    setExercisePickerKey(null)
     try {
-      const rows = await adminRpc<ProgramDetailRow[]>("admin_user_program_detail", {
-        p_user_id: student.user_id,
-      })
+      const [rows] = await Promise.all([
+        adminRpc<ProgramDetailRow[]>("admin_user_program_detail", { p_user_id: student.user_id }),
+        exerciseCatalogFull.length === 0 ? loadExerciseCatalogFull() : Promise.resolve(),
+      ])
       const detail = rows[0]
       if (!detail?.program_id) {
         setModalError("Usuario sem programa atual para editar.")
@@ -460,6 +492,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
           workoutDayId: day.workout_day_id,
           nome: day.nome,
           foco: day.foco ?? "",
+          imagemUrl: day.imagem_url ?? "",
           exercicios: (day.exercicios_snapshot ?? day.exercicios ?? []).map((exercise, index) => ({
             ordem: exercise.ordem ?? index + 1,
             exerciseId: exercise.exercise_id,
@@ -467,6 +500,9 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
             series: exercise.series ?? null,
             repsOuDuracao: exercise.reps_ou_duracao ?? exercise.reps ?? "",
             descansoSegundos: exercise.descanso_segundos ?? 0,
+            videoUrlOverride: exercise.video_url_override ?? "",
+            instrucaoTextoOverride: exercise.instrucao_texto_override ?? "",
+            observacoes: exercise.observacoes ?? "",
           })),
         })),
       })
@@ -481,6 +517,8 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setProgramFormState(null)
     setSaveState("idle")
     setModalError(null)
+    setExercisePickerKey(null)
+    setExercisePickerQuery("")
   }
 
   function updateProtocolForm(patch: Partial<ProtocolForm>) {
@@ -622,6 +660,63 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
           }
         : current
     )
+  }
+
+  function addProgramExercise(dayIndex: number) {
+    const fallback = exerciseCatalogFull[0]
+    if (!fallback) {
+      setModalError("Nenhum exercicio cadastrado no catalogo para adicionar.")
+      return
+    }
+    setProgramFormState((current) =>
+      current
+        ? {
+            ...current,
+            days: current.days.map((day, currentDayIndex) =>
+              currentDayIndex === dayIndex
+                ? {
+                    ...day,
+                    exercicios: [
+                      ...day.exercicios,
+                      {
+                        ordem: day.exercicios.length + 1,
+                        exerciseId: fallback.exercise_id,
+                        nome: fallback.nome,
+                        series: 3,
+                        repsOuDuracao: "12",
+                        descansoSegundos: 60,
+                        videoUrlOverride: "",
+                        instrucaoTextoOverride: "",
+                        observacoes: "",
+                      },
+                    ],
+                  }
+                : day
+            ),
+          }
+        : current
+    )
+  }
+
+  function removeProgramExercise(dayIndex: number, exerciseIndex: number) {
+    setProgramFormState((current) =>
+      current
+        ? {
+            ...current,
+            days: current.days.map((day, currentDayIndex) =>
+              currentDayIndex === dayIndex
+                ? { ...day, exercicios: day.exercicios.filter((_, index) => index !== exerciseIndex) }
+                : day
+            ),
+          }
+        : current
+    )
+  }
+
+  function selectProgramExercise(dayIndex: number, exerciseIndex: number, option: AdminExerciseCatalogRow) {
+    updateProgramExercise(dayIndex, exerciseIndex, { exerciseId: option.exercise_id, nome: option.nome })
+    setExercisePickerKey(null)
+    setExercisePickerQuery("")
   }
 
   async function handleSaveProtocolo() {
@@ -1107,57 +1202,174 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                 {programFormState.days.map((day, dayIndex) => (
                   <Card key={day.workoutDayId}>
                     <CardContent className="space-y-3 p-4">
-                      <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                      <label className="block space-y-1.5">
+                        <span className="text-sm font-medium">Nome do treino</span>
                         <Input
                           value={day.nome}
                           onChange={(event) => updateProgramDay(dayIndex, { nome: event.target.value })}
                           placeholder="Nome do treino"
                         />
+                      </label>
+                      <label className="block space-y-1.5">
+                        <span className="text-sm font-medium">Foco</span>
                         <Input
                           value={day.foco}
                           onChange={(event) => updateProgramDay(dayIndex, { foco: event.target.value })}
                           placeholder="Foco"
                         />
+                      </label>
+                      <label className="block space-y-1.5">
+                        <span className="text-sm font-medium">Imagem do treino (opcional)</span>
+                        <Input
+                          value={day.imagemUrl}
+                          onChange={(event) => updateProgramDay(dayIndex, { imagemUrl: event.target.value })}
+                          placeholder="https://..."
+                        />
+                      </label>
+
+                      <div className="flex items-center justify-between gap-3 pt-2">
+                        <h4 className="text-sm font-semibold">Exercícios</h4>
+                        <Button type="button" variant="outline" size="sm" onClick={() => addProgramExercise(dayIndex)}>
+                          Adicionar exercício
+                        </Button>
                       </div>
-                      {day.exercicios.map((exercise, exerciseIndex) => (
-                        <div key={`${day.workoutDayId}-${exerciseIndex}`} className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 md:grid-cols-[80px_1fr_90px_120px_120px]">
-                          <StepperInput
-                            value={exercise.ordem}
-                            min={1}
-                            onChange={(value) =>
-                              updateProgramExercise(dayIndex, exerciseIndex, { ordem: value })
-                            }
-                          />
-                          <Input
-                            value={exercise.exerciseId}
-                            onChange={(event) =>
-                              updateProgramExercise(dayIndex, exerciseIndex, { exerciseId: event.target.value })
-                            }
-                            placeholder="exerciseId"
-                          />
-                          <StepperInput
-                            value={exercise.series ?? 0}
-                            min={0}
-                            onChange={(value) =>
-                              updateProgramExercise(dayIndex, exerciseIndex, { series: value || null })
-                            }
-                          />
-                          <Input
-                            value={exercise.repsOuDuracao}
-                            onChange={(event) =>
-                              updateProgramExercise(dayIndex, exerciseIndex, { repsOuDuracao: event.target.value })
-                            }
-                            placeholder="Reps/duração"
-                          />
-                          <StepperInput
-                            value={exercise.descansoSegundos}
-                            min={0}
-                            onChange={(value) =>
-                              updateProgramExercise(dayIndex, exerciseIndex, { descansoSegundos: value })
-                            }
-                          />
-                        </div>
-                      ))}
+
+                      {day.exercicios.map((exercise, exerciseIndex) => {
+                        const pickerKey = `${dayIndex}-${exerciseIndex}`
+                        const isPickerOpen = exercisePickerKey === pickerKey
+                        const filteredCatalog = exerciseCatalogFull.filter((option) =>
+                          `${option.nome} ${option.grupo_muscular}`
+                            .toLowerCase()
+                            .includes(exercisePickerQuery.trim().toLowerCase())
+                        )
+                        return (
+                          <div key={pickerKey} className="space-y-3 rounded-md border border-border p-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="flex items-center gap-2">
+                                <span className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+                                  {exercise.ordem}
+                                </span>
+                                <span className="text-sm font-semibold">{exercise.nome}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => {
+                                    setExercisePickerKey(isPickerOpen ? null : pickerKey)
+                                    setExercisePickerQuery("")
+                                  }}
+                                >
+                                  Trocar exercício
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => removeProgramExercise(dayIndex, exerciseIndex)}
+                                  aria-label="Remover exercício"
+                                >
+                                  <Trash2 />
+                                </Button>
+                              </div>
+                            </div>
+
+                            {isPickerOpen && (
+                              <div className="space-y-2 rounded-md border border-border bg-muted/20 p-2">
+                                <SearchInput
+                                  value={exercisePickerQuery}
+                                  onChange={setExercisePickerQuery}
+                                  placeholder="Buscar exercício cadastrado..."
+                                />
+                                <div className="max-h-48 space-y-1 overflow-y-auto">
+                                  {filteredCatalog.length === 0 ? (
+                                    <p className="p-2 text-sm text-muted-foreground">Nenhum exercício encontrado.</p>
+                                  ) : (
+                                    filteredCatalog.slice(0, 30).map((option) => (
+                                      <button
+                                        key={option.exercise_id}
+                                        type="button"
+                                        className="block w-full rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent"
+                                        onClick={() => selectProgramExercise(dayIndex, exerciseIndex, option)}
+                                      >
+                                        <span className="block font-medium">{option.nome}</span>
+                                        <span className="block text-xs text-muted-foreground">{option.grupo_muscular}</span>
+                                      </button>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                              <label className="block space-y-1.5">
+                                <span className="text-xs text-muted-foreground">Séries</span>
+                                <StepperInput
+                                  value={exercise.series ?? 0}
+                                  min={0}
+                                  onChange={(value) =>
+                                    updateProgramExercise(dayIndex, exerciseIndex, { series: value || null })
+                                  }
+                                />
+                              </label>
+                              <label className="block space-y-1.5">
+                                <span className="text-xs text-muted-foreground">Reps/duração</span>
+                                <Input
+                                  value={exercise.repsOuDuracao}
+                                  onChange={(event) =>
+                                    updateProgramExercise(dayIndex, exerciseIndex, { repsOuDuracao: event.target.value })
+                                  }
+                                  placeholder="Reps/duração"
+                                />
+                              </label>
+                              <label className="block space-y-1.5">
+                                <span className="text-xs text-muted-foreground">Descanso (s)</span>
+                                <StepperInput
+                                  value={exercise.descansoSegundos}
+                                  min={0}
+                                  onChange={(value) =>
+                                    updateProgramExercise(dayIndex, exerciseIndex, { descansoSegundos: value })
+                                  }
+                                />
+                              </label>
+                            </div>
+
+                            <label className="block space-y-1.5">
+                              <span className="text-xs text-muted-foreground">Vídeo do exercício (opcional)</span>
+                              <Input
+                                value={exercise.videoUrlOverride}
+                                onChange={(event) =>
+                                  updateProgramExercise(dayIndex, exerciseIndex, { videoUrlOverride: event.target.value })
+                                }
+                                placeholder="https://..."
+                              />
+                            </label>
+                            <label className="block space-y-1.5">
+                              <span className="text-xs text-muted-foreground">Como executar (opcional)</span>
+                              <Textarea
+                                value={exercise.instrucaoTextoOverride}
+                                onChange={(event) =>
+                                  updateProgramExercise(dayIndex, exerciseIndex, {
+                                    instrucaoTextoOverride: event.target.value,
+                                  })
+                                }
+                                placeholder="Como executar (opcional)"
+                              />
+                            </label>
+                            <label className="block space-y-1.5">
+                              <span className="text-xs text-muted-foreground">Observações e cuidados (opcional)</span>
+                              <Textarea
+                                value={exercise.observacoes}
+                                onChange={(event) =>
+                                  updateProgramExercise(dayIndex, exerciseIndex, { observacoes: event.target.value })
+                                }
+                                placeholder="Observações e cuidados (opcional)"
+                              />
+                            </label>
+                          </div>
+                        )
+                      })}
                     </CardContent>
                   </Card>
                 ))}

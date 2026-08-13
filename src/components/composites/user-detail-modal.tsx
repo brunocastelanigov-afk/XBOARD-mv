@@ -27,7 +27,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/atoms/tab
 import { ToggleButtonGroup, type ToggleButtonGroupOption } from "@/components/atoms/toggle-button-group"
 import { EntityCard } from "@/components/composites/entity-card"
 import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
+import { adminMutation } from "@/lib/admin-api"
 import { cn } from "@/lib/utils"
+
+type AdminTemporaryPasswordResponse =
+  | { status: "issued"; temporaryPassword: string }
+  | { status: "already_issued" }
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Não foi possível concluir a operação."
+}
 
 export type UserDetailTopStatus = "reembolsada" | "vencendo" | "sem_acesso" | null
 
@@ -149,12 +158,18 @@ interface UserDetailModalProps {
 }
 
 type PasswordSaveState = "idle" | "loading" | "saved"
+type TempPasswordState = "idle" | "loading"
 
 export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailModalProps) {
   const [plano, setPlano] = React.useState(user.acessoGestao.plano)
   const [cargo, setCargo] = React.useState(user.acessoGestao.cargo)
   const [showNewPassword, setShowNewPassword] = React.useState(false)
+  const [newPassword, setNewPassword] = React.useState("")
+  const [confirmPassword, setConfirmPassword] = React.useState("")
   const [passwordSaveState, setPasswordSaveState] = React.useState<PasswordSaveState>("idle")
+  const [passwordError, setPasswordError] = React.useState<string | null>(null)
+  const [tempPasswordState, setTempPasswordState] = React.useState<TempPasswordState>("idle")
+  const [temporaryPassword, setTemporaryPassword] = React.useState<string | null>(null)
 
   React.useEffect(() => {
     if (passwordSaveState !== "saved") return
@@ -162,10 +177,54 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
     return () => clearTimeout(timeout)
   }, [passwordSaveState])
 
-  function handleChangePassword() {
+  async function handleChangePassword() {
     if (passwordSaveState !== "idle") return
+    setPasswordError(null)
+
+    if (newPassword.length < 6) {
+      setPasswordError("A senha precisa ter no mínimo 6 caracteres.")
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError("As senhas não coincidem.")
+      return
+    }
+
     setPasswordSaveState("loading")
-    setTimeout(() => setPasswordSaveState("saved"), 900)
+    try {
+      await adminMutation<{ status: "updated" }>(`/admin/users/${user.id}/password`, {
+        method: "POST",
+        body: { password: newPassword },
+      })
+      setNewPassword("")
+      setConfirmPassword("")
+      setPasswordSaveState("saved")
+    } catch (error) {
+      setPasswordError(errorMessage(error))
+      setPasswordSaveState("idle")
+    }
+  }
+
+  async function handleGenerateTemporaryPassword() {
+    if (tempPasswordState !== "idle") return
+    setPasswordError(null)
+    setTempPasswordState("loading")
+    try {
+      const response = await adminMutation<AdminTemporaryPasswordResponse>(
+        `/admin/users/${user.id}/password-temp`,
+        { method: "POST" }
+      )
+      setTemporaryPassword(response.status === "issued" ? response.temporaryPassword : null)
+    } catch (error) {
+      setPasswordError(errorMessage(error))
+    } finally {
+      setTempPasswordState("idle")
+    }
+  }
+
+  async function handleCopyTemporaryPassword() {
+    if (!temporaryPassword) return
+    await navigator.clipboard.writeText(temporaryPassword)
   }
 
   return (
@@ -327,21 +386,51 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
                 A senha atual fica criptografada e não pode ser exibida. Gere ou defina uma nova senha e informe ao
                 aluno.
               </p>
+              {passwordError && (
+                <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                  {passwordError}
+                </p>
+              )}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <Button type="button" variant="outline" className="gap-1.5">
-                  <RefreshCcw className="size-3.5" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-1.5"
+                  disabled={tempPasswordState !== "idle"}
+                  onClick={() => void handleGenerateTemporaryPassword()}
+                >
+                  {tempPasswordState === "loading" ? (
+                    <Loader2 className="size-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCcw className="size-3.5" />
+                  )}
                   Gerar senha temporária
                 </Button>
-                <Button type="button" variant="outline" className="gap-1.5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="gap-1.5"
+                  disabled={!temporaryPassword}
+                  onClick={() => void handleCopyTemporaryPassword()}
+                >
                   <Copy className="size-3.5" />
                   Copiar senha
                 </Button>
               </div>
+              {temporaryPassword && (
+                <Input readOnly value={temporaryPassword} className="font-mono" />
+              )}
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                 <label className="block space-y-1.5">
                   <span className="text-sm font-medium">Nova senha</span>
                   <div className="relative">
-                    <Input type={showNewPassword ? "text" : "password"} placeholder="Mínimo 6 caracteres" className="pr-9" />
+                    <Input
+                      type={showNewPassword ? "text" : "password"}
+                      placeholder="Mínimo 6 caracteres"
+                      className="pr-9"
+                      value={newPassword}
+                      onChange={(event) => setNewPassword(event.target.value)}
+                    />
                     <button
                       type="button"
                       className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground"
@@ -354,14 +443,19 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
                 </label>
                 <label className="block space-y-1.5">
                   <span className="text-sm font-medium">Confirmar nova senha</span>
-                  <Input type="password" placeholder="Repita a senha" />
+                  <Input
+                    type="password"
+                    placeholder="Repita a senha"
+                    value={confirmPassword}
+                    onChange={(event) => setConfirmPassword(event.target.value)}
+                  />
                 </label>
               </div>
               <Button
                 type="button"
                 className={cn("w-full gap-1.5", passwordSaveState === "saved" && "bg-green-600 hover:bg-green-600 text-white")}
-                disabled={passwordSaveState !== "idle"}
-                onClick={handleChangePassword}
+                disabled={passwordSaveState !== "idle" || newPassword.length === 0 || confirmPassword.length === 0}
+                onClick={() => void handleChangePassword()}
               >
                 {passwordSaveState === "loading" ? (
                   <>
