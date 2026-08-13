@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { Check, Loader2, Package } from "lucide-react"
+import { AlertTriangle, Check, Loader2, Package } from "lucide-react"
 
 import { Button } from "@/components/atoms/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/atoms/card"
@@ -33,6 +33,7 @@ interface AdminAppSettingsRow {
 
 interface AdminLastlinkProductMapRow {
   product_id: string
+  draft_product_id?: string
   tier: "mvp" | "elite"
   is_upsell: boolean
   label: string | null
@@ -145,7 +146,7 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
       if (!settings) throw new Error("Contrato admin_app_settings_current retornou vazio.")
 
       setForm(settingsToForm(settings))
-      setProducts(productRows)
+      setProducts(productRows.map((product) => ({ ...product, draft_product_id: product.product_id })))
       setReavaliacaoDias(String(settings.reassessment_days))
       setLastAppliedText(`Prazo global atual: ${settings.reassessment_days} dia(s)`)
     } catch (loadError) {
@@ -239,15 +240,23 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
     }
   }
 
-  async function handleProductLabelChange(productId: string, label: string) {
+  function handleProductDraftChange(
+    productId: string,
+    patch: Partial<Pick<AdminLastlinkProductMapRow, "draft_product_id" | "label">>
+  ) {
     setProducts((current) =>
-      current.map((product) => (product.product_id === productId ? { ...product, label } : product))
+      current.map((product) => (product.product_id === productId ? { ...product, ...patch } : product))
     )
   }
 
   async function handleSaveProduct(product: AdminLastlinkProductMapRow) {
     if (savingProductId) return
     const label = product.label?.trim() ?? ""
+    const nextProductId = product.draft_product_id?.trim() ?? ""
+    if (!nextProductId) {
+      setError("Informe um product ID para o produto LastLink.")
+      return
+    }
     if (!label) {
       setError("Informe um label para o produto LastLink.")
       return
@@ -259,12 +268,18 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
     try {
       const saved = await adminMutation<AdminLastlinkProductMapResponse>(
         `/admin/lastlink-product-map/${encodeURIComponent(product.product_id)}`,
-        { method: "PATCH", body: { label } }
+        { method: "PATCH", body: { productId: nextProductId, label } }
       )
       setProducts((current) =>
         current.map((item) =>
-          item.product_id === saved.productId
-            ? { product_id: saved.productId, tier: saved.tier, is_upsell: saved.isUpsell, label: saved.label }
+          item.product_id === product.product_id
+            ? {
+                product_id: saved.productId,
+                draft_product_id: saved.productId,
+                tier: saved.tier,
+                is_upsell: saved.isUpsell,
+                label: saved.label,
+              }
             : item
         )
       )
@@ -400,12 +415,25 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
                     ...(product.is_upsell ? [{ label: "Upsell", variant: "secondary" as const }] : []),
                   ]}
                 >
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      value={product.label ?? ""}
-                      disabled={!canEdit}
-                      onChange={(event) => handleProductLabelChange(product.product_id, event.target.value)}
-                    />
+                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)_auto] lg:items-end">
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium">Product ID LastLink</span>
+                      <Input
+                        value={product.draft_product_id ?? product.product_id}
+                        disabled={!canEdit}
+                        onChange={(event) =>
+                          handleProductDraftChange(product.product_id, { draft_product_id: event.target.value })
+                        }
+                      />
+                    </label>
+                    <label className="block space-y-2">
+                      <span className="text-sm font-medium">Label</span>
+                      <Input
+                        value={product.label ?? ""}
+                        disabled={!canEdit}
+                        onChange={(event) => handleProductDraftChange(product.product_id, { label: event.target.value })}
+                      />
+                    </label>
                     {canEdit && (
                       <Button
                         type="button"
@@ -413,7 +441,7 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
                         disabled={savingProductId === product.product_id}
                         onClick={() => handleSaveProduct(product)}
                       >
-                        {savingProductId === product.product_id ? "Salvando..." : "Salvar label"}
+                        {savingProductId === product.product_id ? "Salvando..." : "Salvar produto"}
                       </Button>
                     )}
                   </div>
@@ -481,18 +509,27 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
             </CardContent>
           </Card>
         ) : (
-          <ApplyValueCard
-            title="Prazo de Reavaliação"
-            description="Define o intervalo padrão; cada aluno mantém sua própria contagem individual."
-            label="Prazo global de reavaliação (em dias)"
-            value={reavaliacaoDias}
-            onChange={setReavaliacaoDias}
-            onApply={handleApplyReavaliacao}
-            canApply={canEdit}
-            applyState={applyState}
-            helpText={`Cada aluno verá a reavaliação após ${reavaliacaoDias || 0} dia(s) contados da própria última avaliação ou liberação.`}
-            lastAppliedText={lastAppliedText}
-          />
+          <div className="space-y-3">
+            <div className="flex gap-3 rounded-lg border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+              <p>
+                Este valor salva no admin, mas o app ainda não consome esse prazo para alterar o contador/restante
+                de treino dos alunos.
+              </p>
+            </div>
+            <ApplyValueCard
+              title="Prazo de Reavaliação"
+              description="Define o intervalo padrão salvo nas configurações administrativas."
+              label="Prazo global de reavaliação (em dias)"
+              value={reavaliacaoDias}
+              onChange={setReavaliacaoDias}
+              onApply={handleApplyReavaliacao}
+              canApply={canEdit}
+              applyState={applyState}
+              helpText="Integração pendente no app: hoje este campo não muda a contagem visível do aluno."
+              lastAppliedText={lastAppliedText}
+            />
+          </div>
         )}
       </form>
     </div>

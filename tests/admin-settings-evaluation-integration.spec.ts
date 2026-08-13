@@ -209,10 +209,14 @@ test.describe("Story 15.7 — Configuracoes e Avaliacao reais", () => {
     })
     await page.route("**/admin/lastlink-product-map/prod-trinca", async (route) => {
       mutationHeaders.push(route.request().headers())
+      expect(route.request().postDataJSON()).toEqual({
+        productId: "prod-trinca-qa",
+        label: "Produto Trinca QA",
+      })
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ productId: "prod-trinca", tier: "mvp", isUpsell: false, label: "Produto Trinca QA" }),
+        body: JSON.stringify({ productId: "prod-trinca-qa", tier: "mvp", isUpsell: false, label: "Produto Trinca QA" }),
       })
     })
 
@@ -220,9 +224,11 @@ test.describe("Story 15.7 — Configuracoes e Avaliacao reais", () => {
 
     await expect(page.locator('input[value="Treino Trinca"]')).toBeVisible()
     await expect(page.getByText("prod-trinca").first()).toBeVisible()
+    await expect(page.getByText(/app ainda não consome esse prazo/)).toBeVisible()
 
+    await page.locator('input[value="prod-trinca"]').fill("prod-trinca-qa")
     await page.locator('input[value="Produto Trinca"]').fill("Produto Trinca QA")
-    await page.getByRole("button", { name: "Salvar label" }).first().click()
+    await page.getByRole("button", { name: "Salvar produto" }).first().click()
 
     await page.locator('input[value="https://checkout.example.com/upgrade"]').fill("https://checkout.example.com/upgrade-novo")
     await page.getByRole("button", { name: "Salvar configurações" }).click()
