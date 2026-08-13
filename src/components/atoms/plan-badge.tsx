@@ -19,7 +19,10 @@ const planConfig: Record<
 }
 
 function PlanBadge({ plan, className }: PlanBadgeProps) {
-  const { label, icon: Icon, variant } = planConfig[plan]
+  const config = planConfig[plan]
+  if (!config) return null
+
+  const { label, icon: Icon, variant } = config
   return (
     <Badge variant={variant} className={cn("gap-1", className)}>
       <Icon className="size-3" />
