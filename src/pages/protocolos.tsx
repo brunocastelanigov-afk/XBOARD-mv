@@ -134,6 +134,8 @@ interface AdminExerciseCatalogRow {
   exercise_id: string
   nome: string
   grupo_muscular: string
+  video_url: string | null
+  instrucao_texto: string | null
 }
 
 interface ProgramDetailRow {
@@ -362,6 +364,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [exerciseCatalogFull, setExerciseCatalogFull] = useState<AdminExerciseCatalogRow[]>([])
   const [expandedProgramExerciseKey, setExpandedProgramExerciseKey] = useState<string | null>(null)
+  const [expandedProtocolDayIndex, setExpandedProtocolDayIndex] = useState<number | null>(null)
   const [exercisePickerQuery, setExercisePickerQuery] = useState("")
 
   const exerciseCatalog = useMemo(() => exerciseCatalogFromTemplates(templates), [templates])
@@ -399,7 +402,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setLoading(true)
     setError(null)
     try {
-      await Promise.all([loadTemplates(), loadStudents()])
+      await Promise.all([loadTemplates(), loadStudents(), loadExerciseCatalogFull()])
     } catch (loadError) {
       setError(errorMessage(loadError))
       setTemplates([])
@@ -468,6 +471,8 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setProgramFormState(null)
     setModalError(null)
     setSaveState("idle")
+    setExpandedProtocolDayIndex(null)
+    setExpandedProgramExerciseKey(null)
     setModalMode("create")
   }
 
@@ -476,6 +481,8 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setProgramFormState(null)
     setModalError(null)
     setSaveState("idle")
+    setExpandedProtocolDayIndex(null)
+    setExpandedProgramExerciseKey(null)
     setModalMode("edit")
   }
 
@@ -528,6 +535,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setProgramFormState(null)
     setSaveState("idle")
     setModalError(null)
+    setExpandedProtocolDayIndex(null)
     setExpandedProgramExerciseKey(null)
     setExercisePickerQuery("")
   }
@@ -725,7 +733,16 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   }
 
   function selectProgramExercise(dayIndex: number, exerciseIndex: number, option: { exercise_id: string; nome: string }) {
-    updateProgramExercise(dayIndex, exerciseIndex, { exerciseId: option.exercise_id, nome: option.nome })
+    // Troca de exercício sempre limpa os overrides do exercício anterior —
+    // vídeo/como-executar exibidos passam a vir do cadastro real do novo
+    // exercício (fallback em exerciseCatalogFull) até o admin digitar um
+    // override explícito para ele.
+    updateProgramExercise(dayIndex, exerciseIndex, {
+      exerciseId: option.exercise_id,
+      nome: option.nome,
+      videoUrlOverride: "",
+      instrucaoTextoOverride: "",
+    })
     setExercisePickerQuery("")
   }
 
@@ -1106,94 +1123,199 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                   Adicionar treino
                 </Button>
               </div>
-              {protocolFormState.dias.map((day, dayIndex) => (
-                <Card key={dayIndex}>
-                  <CardContent className="space-y-3 p-4">
-                    <div className="grid grid-cols-1 gap-2 md:grid-cols-[80px_1fr_1fr_auto]">
-                      <StepperInput
-                        value={day.ordem}
-                        min={1}
-                        onChange={(value) => updateProtocolDay(dayIndex, { ordem: value })}
-                      />
-                      <Input
-                        value={day.nome}
-                        onChange={(event) => updateProtocolDay(dayIndex, { nome: event.target.value })}
-                        placeholder="Nome do treino"
-                      />
-                      <Input
-                        value={day.descricao}
-                        onChange={(event) => updateProtocolDay(dayIndex, { descricao: event.target.value })}
-                        placeholder="Descrição"
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeProtocolDay(dayIndex)}
-                        aria-label="Remover treino"
-                      >
-                        <Trash2 />
-                      </Button>
-                    </div>
-                    <div className="space-y-2">
-                      {day.exercicios.map((exercise, exerciseIndex) => (
-                        <div key={exerciseIndex} className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 md:grid-cols-[80px_1fr_90px_120px_120px_auto]">
-                          <StepperInput
-                            value={exercise.ordem}
-                            min={1}
-                            onChange={(value) =>
-                              updateProtocolExercise(dayIndex, exerciseIndex, { ordem: value })
-                            }
-                          />
-                          <Input
-                            value={exercise.exerciseId}
-                            onChange={(event) =>
-                              updateProtocolExercise(dayIndex, exerciseIndex, {
-                                exerciseId: event.target.value,
-                                nome: exerciseCatalog.find((item) => item.id === event.target.value)?.nome ?? exercise.nome,
-                              })
-                            }
-                            placeholder="exerciseId"
-                          />
-                          <StepperInput
-                            value={exercise.series ?? 0}
-                            min={0}
-                            onChange={(value) =>
-                              updateProtocolExercise(dayIndex, exerciseIndex, { series: value || null })
-                            }
-                          />
-                          <Input
-                            value={exercise.repsOuDuracao}
-                            onChange={(event) =>
-                              updateProtocolExercise(dayIndex, exerciseIndex, { repsOuDuracao: event.target.value })
-                            }
-                            placeholder="Reps/duração"
-                          />
-                          <StepperInput
-                            value={exercise.descansoSegundos}
-                            min={0}
-                            onChange={(value) =>
-                              updateProtocolExercise(dayIndex, exerciseIndex, { descansoSegundos: value })
-                            }
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeProtocolExercise(dayIndex, exerciseIndex)}
-                            aria-label="Remover exercício"
-                          >
-                            <Trash2 />
-                          </Button>
-                        </div>
-                      ))}
-                      <Button type="button" variant="outline" size="sm" onClick={() => addProtocolExercise(dayIndex)}>
-                        Adicionar exercício real
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
+              {protocolFormState.dias.map((day, dayIndex) => {
+                const dayExpanded = expandedProtocolDayIndex === dayIndex
+                return (
+                  <div key={dayIndex} className="space-y-3">
+                    <ReorderableListItem
+                      order={day.ordem}
+                      title={day.nome || `Treino ${dayIndex + 1}`}
+                      metadata={[
+                        day.duracaoMinutos ? `${day.duracaoMinutos} min` : "Sem duração",
+                        `${day.exercicios.length} exercício(s)`,
+                      ]}
+                      onRemove={() => removeProtocolDay(dayIndex)}
+                      onExpand={() => setExpandedProtocolDayIndex(dayExpanded ? null : dayIndex)}
+                    />
+
+                    {dayExpanded && (
+                      <Card className="ml-4 rounded-lg border-border">
+                        <CardContent className="space-y-4 p-4">
+                          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                            <label className="block space-y-1.5">
+                              <span className="text-xs font-medium uppercase text-muted-foreground">Ordem</span>
+                              <StepperInput
+                                value={day.ordem}
+                                min={1}
+                                onChange={(value) => updateProtocolDay(dayIndex, { ordem: value })}
+                              />
+                            </label>
+                            <label className="block space-y-1.5">
+                              <span className="text-xs font-medium uppercase text-muted-foreground">
+                                Duração (min)
+                              </span>
+                              <StepperInput
+                                value={day.duracaoMinutos ?? 0}
+                                min={0}
+                                onChange={(value) => updateProtocolDay(dayIndex, { duracaoMinutos: value || null })}
+                              />
+                            </label>
+                          </div>
+                          <label className="block space-y-1.5">
+                            <span className="text-xs font-medium uppercase text-muted-foreground">Nome do treino</span>
+                            <Input
+                              value={day.nome}
+                              onChange={(event) => updateProtocolDay(dayIndex, { nome: event.target.value })}
+                              placeholder="Nome do treino"
+                            />
+                          </label>
+                          <label className="block space-y-1.5">
+                            <span className="text-xs font-medium uppercase text-muted-foreground">
+                              Descrição/foco do treino
+                            </span>
+                            <Textarea
+                              value={day.descricao}
+                              onChange={(event) => updateProtocolDay(dayIndex, { descricao: event.target.value })}
+                              placeholder="Aquecimento + abdominal + membros inferiores + superiores"
+                            />
+                          </label>
+
+                          <div className="space-y-2 border-t border-border pt-3">
+                            <div className="flex items-center justify-between">
+                              <p className="text-sm font-medium">
+                                Exercícios
+                                <span className="ml-1 text-xs font-normal text-muted-foreground">
+                                  {day.exercicios.length} item(ns) na ordem de execução
+                                </span>
+                              </p>
+                              <Button type="button" variant="outline" size="sm" onClick={() => addProtocolExercise(dayIndex)}>
+                                <Plus />
+                                Adicionar
+                              </Button>
+                            </div>
+
+                            {day.exercicios.length === 0 ? (
+                              <EmptyState message="Nenhum exercício adicionado a este treino ainda." />
+                            ) : (
+                              <div className="space-y-2">
+                                {day.exercicios.map((exercise, exerciseIndex) => {
+                                  const exerciseKey = `protocol-${dayIndex}-${exerciseIndex}`
+                                  const exerciseExpanded = expandedProgramExerciseKey === exerciseKey
+                                  const catalogEntry = exerciseCatalogFull.find(
+                                    (option) => option.exercise_id === exercise.exerciseId
+                                  )
+                                  return (
+                                    <div key={exerciseKey} className="space-y-2">
+                                      <ReorderableListItem
+                                        order={exercise.ordem}
+                                        title={exercise.nome}
+                                        metadata={[
+                                          `${exercise.series ?? 0} séries`,
+                                          `${exercise.repsOuDuracao} reps`,
+                                          `${exercise.descansoSegundos}s descanso`,
+                                        ]}
+                                        draggable
+                                        onRemove={() => removeProtocolExercise(dayIndex, exerciseIndex)}
+                                        onExpand={() => {
+                                          setExpandedProgramExerciseKey(exerciseExpanded ? null : exerciseKey)
+                                          setExercisePickerQuery("")
+                                        }}
+                                      />
+
+                                      {exerciseExpanded && (
+                                        <Card className="ml-4 rounded-lg border-border">
+                                          <CardContent className="space-y-4 p-4">
+                                            <div className="space-y-1.5">
+                                              <p className="text-xs font-medium uppercase text-muted-foreground">
+                                                Buscar exercício cadastrado...
+                                              </p>
+                                              <LinkedEntitySearchList
+                                                query={exercisePickerQuery}
+                                                onQueryChange={setExercisePickerQuery}
+                                                groups={exerciseCatalogToSearchGroups(exerciseCatalogFull, exercisePickerQuery)}
+                                                onSelect={(item) =>
+                                                  updateProtocolExercise(dayIndex, exerciseIndex, {
+                                                    exerciseId: item.id,
+                                                    nome: item.label,
+                                                  })
+                                                }
+                                              />
+                                            </div>
+
+                                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                              <label className="block space-y-1.5">
+                                                <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                  Séries
+                                                </span>
+                                                <StepperInput
+                                                  value={exercise.series ?? 0}
+                                                  min={0}
+                                                  onChange={(value) =>
+                                                    updateProtocolExercise(dayIndex, exerciseIndex, { series: value || null })
+                                                  }
+                                                />
+                                              </label>
+                                              <label className="block space-y-1.5">
+                                                <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                  Reps/duração
+                                                </span>
+                                                <Input
+                                                  value={exercise.repsOuDuracao}
+                                                  onChange={(event) =>
+                                                    updateProtocolExercise(dayIndex, exerciseIndex, {
+                                                      repsOuDuracao: event.target.value,
+                                                    })
+                                                  }
+                                                  placeholder="Reps/duração"
+                                                />
+                                              </label>
+                                              <label className="block space-y-1.5">
+                                                <span className="text-xs font-medium uppercase text-muted-foreground">
+                                                  Descanso (s)
+                                                </span>
+                                                <StepperInput
+                                                  value={exercise.descansoSegundos}
+                                                  min={0}
+                                                  onChange={(value) =>
+                                                    updateProtocolExercise(dayIndex, exerciseIndex, { descansoSegundos: value })
+                                                  }
+                                                />
+                                              </label>
+                                            </div>
+
+                                            {(catalogEntry?.video_url || catalogEntry?.instrucao_texto) && (
+                                              <div className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+                                                <p className="text-xs font-medium uppercase text-muted-foreground">
+                                                  Dados cadastrados deste exercício (somente leitura — vem do catálogo
+                                                  de exercícios, não é editável por protocolo)
+                                                </p>
+                                                {catalogEntry.video_url && (
+                                                  <p className="truncate text-sm text-foreground">
+                                                    Vídeo: {catalogEntry.video_url}
+                                                  </p>
+                                                )}
+                                                {catalogEntry.instrucao_texto && (
+                                                  <p className="text-sm text-foreground">
+                                                    Como executar: {catalogEntry.instrucao_texto}
+                                                  </p>
+                                                )}
+                                              </div>
+                                            )}
+                                          </CardContent>
+                                        </Card>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    )}
+                  </div>
+                )
+              })}
             </div>
           </div>
         </EntityEditModalShell>
@@ -1296,7 +1418,13 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                   {day.exercicios.map((exercise, exerciseIndex) => {
                                     const exerciseKey = `${dayIndex}-${exerciseIndex}`
                                     const exerciseExpanded = expandedProgramExerciseKey === exerciseKey
-                                    const embedUrl = youtubeEmbedUrl(exercise.videoUrlOverride)
+                                    const catalogEntry = exerciseCatalogFull.find(
+                                      (option) => option.exercise_id === exercise.exerciseId
+                                    )
+                                    const effectiveVideoUrl = exercise.videoUrlOverride || catalogEntry?.video_url || ""
+                                    const effectiveInstrucao =
+                                      exercise.instrucaoTextoOverride || catalogEntry?.instrucao_texto || ""
+                                    const embedUrl = youtubeEmbedUrl(effectiveVideoUrl)
                                     return (
                                       <div key={exerciseKey} className="space-y-2">
                                         <ReorderableListItem
@@ -1379,11 +1507,12 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                                   Vídeo do exercício (opcional)
                                                 </p>
                                                 <p className="text-xs text-muted-foreground">
-                                                  Cole um link do YouTube ou qualquer URL de vídeo. No app, ele aparece
-                                                  dentro da tela do exercício.
+                                                  {catalogEntry?.video_url && !exercise.videoUrlOverride
+                                                    ? "Mostrando o vídeo cadastrado para este exercício. Edite para sobrescrever só para este aluno."
+                                                    : "Cole um link do YouTube ou qualquer URL de vídeo. No app, ele aparece dentro da tela do exercício."}
                                                 </p>
                                                 <Input
-                                                  value={exercise.videoUrlOverride}
+                                                  value={effectiveVideoUrl}
                                                   onChange={(event) =>
                                                     updateProgramExercise(dayIndex, exerciseIndex, {
                                                       videoUrlOverride: event.target.value,
@@ -1408,7 +1537,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                                   Como executar (opcional)
                                                 </span>
                                                 <Textarea
-                                                  value={exercise.instrucaoTextoOverride}
+                                                  value={effectiveInstrucao}
                                                   onChange={(event) =>
                                                     updateProgramExercise(dayIndex, exerciseIndex, {
                                                       instrucaoTextoOverride: event.target.value,
