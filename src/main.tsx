@@ -15,16 +15,13 @@ import { PerformancePage } from './pages/performance'
 import { AuditoriaPage } from './pages/auditoria'
 import { CampaignRoiPage } from './pages/campaign-roi'
 import { LeadDetailPage } from './pages/lead-detail'
-import { DashboardPage } from './pages/dashboard'
 import { UsuariosPage } from './pages/usuarios'
-import { ConquistasPage } from './pages/conquistas'
 import { ExerciciosPage } from './pages/exercicios'
 import { ProtocolosPage } from './pages/protocolos'
 import { BannersPage } from './pages/banners'
 import { RegrasPage } from './pages/regras'
 import { LiberarUsuarioPage } from './pages/liberar-usuario'
 import { ConfiguracoesPage } from './pages/configuracoes'
-import { RelatoriosPage } from './pages/relatorios'
 import { AvaliacaoPage } from './pages/avaliacao'
 import { LoginPage } from './pages/login'
 import { ForgotPasswordPage } from './pages/forgot-password'
@@ -79,7 +76,7 @@ const router = createBrowserRouter([
         children: [
           {
             path: 'crm/dashboard',
-            element: <DashboardPage />
+            element: <Navigate to="/crm/usuarios" replace />
           },
           {
             path: 'crm/usuarios',
@@ -91,7 +88,7 @@ const router = createBrowserRouter([
           },
           {
             path: 'crm/conquistas',
-            element: <ConquistasPage />
+            element: <Navigate to="/crm/usuarios" replace />
           },
           {
             path: 'crm/exercicios',
@@ -116,15 +113,12 @@ const router = createBrowserRouter([
           {
             path: 'crm/configuracoes',
             element: <ConfiguracoesPage />
+          },
+          {
+            path: 'crm/relatorios',
+            element: <Navigate to="/crm/usuarios" replace />
           }
         ]
-      },
-      {
-        // Sem group: /crm/relatorios não está na lista final da Story 15.1 (mesmo
-        // precedente da Story 15.3 na sidebar) — segue só com o gate base (session +
-        // isAllowedTeamUser) do ProtectedRoute pai, sem checagem de role.
-        path: 'crm/relatorios',
-        element: <RelatoriosPage />
       }
     ]
   },

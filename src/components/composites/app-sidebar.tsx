@@ -1,4 +1,4 @@
-import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, Trophy, ImageIcon, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, PieChart, Users, LayoutDashboard, GraduationCap } from "lucide-react"
+import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, ImageIcon, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, Users, GraduationCap } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -15,8 +15,8 @@ import {
   SidebarFooter,
 } from "@/components/atoms/sidebar"
 
-// Menu items — `group` drives the role gate (Story 15.3): items without a group (e.g.
-// Relatórios) never render for either role until Story 15.8 decides their fate.
+// Menu items — `group` drives the role gate. Story 15.8 hides Dashboard,
+// Conquistas and Relatórios because their Epic 14 backend was cut.
 const items = [
   {
     title: "ROI de Campanhas",
@@ -49,12 +49,6 @@ const items = [
     group: "traffic" as const,
   },
   {
-    title: "Dashboard",
-    url: "/crm/dashboard",
-    icon: LayoutDashboard,
-    group: "crm" as const,
-  },
-  {
     title: "Usuários",
     url: "/crm/usuarios",
     icon: Users,
@@ -76,12 +70,6 @@ const items = [
     title: "Avaliação",
     url: "/crm/avaliacao",
     icon: GraduationCap,
-    group: "crm" as const,
-  },
-  {
-    title: "Conquistas",
-    url: "/crm/conquistas",
-    icon: Trophy,
     group: "crm" as const,
   },
   {
@@ -107,12 +95,6 @@ const items = [
     url: "/crm/configuracoes",
     icon: Settings,
     group: "crm" as const,
-  },
-  {
-    title: "Relatórios",
-    url: "/crm/relatorios",
-    icon: PieChart,
-    group: null,
   },
 ]
 

@@ -10,17 +10,17 @@ const CRM_PROJECT_REF = "lcylofpnwlwaicewhsfl"
 const TEAM_EMAIL = "time.melhorversao@gmail.com"
 
 const CRM_ITEMS = [
-  "Dashboard",
   "Usuários",
   "Protocolos",
   "Exercícios",
   "Avaliação",
-  "Conquistas",
   "Banners",
   "Regras",
   "Liberar usuário",
   "Configurações",
 ]
+
+const HIDDEN_BACKEND_CUT_ITEMS = ["Dashboard", "Conquistas", "Relatórios"]
 
 const TRAFFIC_ITEMS = [
   "ROI de Campanhas",
@@ -99,7 +99,9 @@ test.describe("Story 15.3 — role gate na sidebar", () => {
     for (const item of TRAFFIC_ITEMS) {
       expect(texts.some((t) => t.includes(item))).toBe(false)
     }
-    expect(texts.some((t) => t.includes("Relatórios"))).toBe(false)
+    for (const item of HIDDEN_BACKEND_CUT_ITEMS) {
+      expect(texts.some((t) => t.includes(item))).toBe(false)
+    }
   })
 
   test("conta sem dashboard_role vê só o grupo de tráfego, nenhum item CRM", async ({
@@ -118,7 +120,9 @@ test.describe("Story 15.3 — role gate na sidebar", () => {
     for (const item of CRM_ITEMS) {
       expect(texts.some((t) => t.includes(item))).toBe(false)
     }
-    expect(texts.some((t) => t.includes("Relatórios"))).toBe(false)
+    for (const item of HIDDEN_BACKEND_CUT_ITEMS) {
+      expect(texts.some((t) => t.includes(item))).toBe(false)
+    }
   })
 
   test("conta tiktok_only continua vendo só o grupo de tráfego (regressão, sem mudança de comportamento)", async ({
@@ -135,6 +139,9 @@ test.describe("Story 15.3 — role gate na sidebar", () => {
       expect(texts.some((t) => t.includes(item))).toBe(true)
     }
     for (const item of CRM_ITEMS) {
+      expect(texts.some((t) => t.includes(item))).toBe(false)
+    }
+    for (const item of HIDDEN_BACKEND_CUT_ITEMS) {
       expect(texts.some((t) => t.includes(item))).toBe(false)
     }
   })

@@ -3,7 +3,7 @@ import { useAuth } from "@/contexts/auth-context"
 import type { ReactNode } from "react"
 
 const GROUP_HOME: Record<"crm" | "traffic", string> = {
-  crm: "/crm/dashboard",
+  crm: "/crm/usuarios",
   traffic: "/roi-campanhas",
 }
 
@@ -12,9 +12,7 @@ export function ProtectedRoute({
   group,
 }: {
   children: ReactNode
-  /** Restricts this route subtree to accounts of the given role group (Story 15.4). Omit for
-   * routes with no group in the Story 15.1 list (e.g. /crm/relatorios) — same behavior as
-   * before this story, no role check. */
+  /** Restricts this route subtree to accounts of the given role group (Story 15.4). */
   group?: "crm" | "traffic"
 }) {
   const { loading, session, isAllowedTeamUser, isCrmRole } = useAuth()

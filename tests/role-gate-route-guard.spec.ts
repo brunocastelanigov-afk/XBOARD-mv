@@ -70,7 +70,7 @@ test.describe("Story 15.4 — role gate na rota protegida (bloqueio por URL dire
     await mockRpcs(page)
     await page.goto("/roi-campanhas")
 
-    await expect(page).toHaveURL(/\/crm\/dashboard$/)
+    await expect(page).toHaveURL(/\/crm\/usuarios$/)
   })
 
   test("conta de tráfego acessando rota crm por URL direta é redirecionada pra home do grupo tráfego", async ({
@@ -83,22 +83,37 @@ test.describe("Story 15.4 — role gate na rota protegida (bloqueio por URL dire
     await expect(page).toHaveURL(/\/roi-campanhas$/)
   })
 
-  test("crm/relatorios continua acessível a conta de tráfego, sem gate de grupo", async ({
+  test("crm/relatorios escondido redireciona conta de tráfego pra home do grupo tráfego", async ({
     page,
   }) => {
     await mockTrafficSession(page, TEAM_EMAIL)
     await mockRpcs(page)
     await page.goto("/crm/relatorios")
 
-    await expect(page).toHaveURL(/\/crm\/relatorios$/)
+    await expect(page).toHaveURL(/\/roi-campanhas$/)
   })
 
-  test("crm/relatorios continua acessível a conta crm, sem gate de grupo", async ({ page }) => {
+  test("crm/relatorios escondido redireciona conta crm pra home CRM", async ({ page }) => {
     await mockCrmSession(page)
     await mockRpcs(page)
     await page.goto("/crm/relatorios")
 
-    await expect(page).toHaveURL(/\/crm\/relatorios$/)
+    await expect(page).toHaveURL(/\/crm\/usuarios$/)
+  })
+
+  test("paginas CRM com backend cortado redirecionam sem renderizar dado fabricado", async ({
+    page,
+  }) => {
+    await mockCrmSession(page)
+    await mockRpcs(page)
+
+    for (const path of ["/crm/dashboard", "/crm/conquistas"]) {
+      await page.goto(path)
+      await expect(page).toHaveURL(/\/crm\/usuarios$/)
+      await expect(page.getByText("Total usuários")).toHaveCount(0)
+      await expect(page.getByText("Nova conquista")).toHaveCount(0)
+      await expect(page.getByText("Análise completa do sistema")).toHaveCount(0)
+    }
   })
 
   test("conta fora de isAllowedTeamUser vai pra /login independente de role (regressão)", async ({
