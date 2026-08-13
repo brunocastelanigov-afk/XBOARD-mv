@@ -20,6 +20,7 @@ import { DataGrid } from "@/components/composites/data-grid"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
 import { StatTile } from "@/components/composites/stat-tile"
 import { UserDetailModal, type UserDetail } from "@/components/composites/user-detail-modal"
+import { adminMutation, adminRpc } from "@/lib/admin-api"
 
 type LeadStatus = "elite" | "trinca" | "vencendo" | "reembolsada" | "sem_acesso"
 
@@ -30,25 +31,49 @@ interface Lead {
   status: LeadStatus
   objetivo: string
   sexo: string
-  renda: string
-  frequencia: string
   revenue: number
   refund: number
   idade: number
   peso: number
   altura: number
-  cargasRastreadas?: { exercicio: string; cargaAtual: string }[]
 }
 
-const OBJETIVO_OPTIONS = ["Crescer", "Secar Muito", "Crescer e Secar"]
-const SEXO_OPTIONS = ["Homem", "Mulher"]
-// Nota: opções de renda reaproveitadas por analogia das faixas de "gasto_mensal" já
-// confirmadas em P09/Campos disponíveis — não há print/texto que confirme os rótulos
-// exatos do filtro "renda" de P02. Sinalizar para confirmação visual.
-const RENDA_OPTIONS = ["Até R$ 500", "R$ 500 – R$ 1.000", "Acima de R$ 3.000"]
-// Nota: apenas "alta"/"baixa" estão confirmados no texto do briefing (P01, cards "Freq.
-// média alta"/"Freq. média baixa"). Sem confirmação de uma faixa "média" para este filtro.
-const FREQUENCIA_OPTIONS = ["Alta", "Baixa"]
+type AdminUserListRow = {
+  user_id: string
+  email: string
+  nome_completo: string
+  tier: string
+  role: string
+  is_active: boolean
+  objective: string | null
+  age: number | null
+  sex: string | null
+  created_at: string
+  last_seen_at: string | null
+  access_status: string | null
+}
+
+type AdminUsersRevenueRankRow = {
+  user_id: string
+  email: string
+  nome_completo: string
+  tier: string
+  access_status: string | null
+  revenue_net_cents: number
+}
+
+type AdminUserDetailRow = {
+  user_profile: Record<string, unknown>
+  latest_quiz_response: Record<string, unknown> | null
+  current_program: Record<string, unknown> | null
+  workout_rollup: Record<string, unknown> | null
+  finance_rollup: Record<string, unknown> | null
+  depends_on_future_rollups: boolean
+}
+
+type AdminAppSettingsRow = {
+  reassessment_days: number | null
+}
 
 const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
   { value: "elite", label: "Elite" },
@@ -60,127 +85,123 @@ const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
 
 const ALL = "__all__"
 
-const MOCK_LEADS: Lead[] = [
-  { id: "1", name: "Ana Paula Ferreira", email: "ana.ferreira@email.com", status: "elite", objetivo: "Crescer", sexo: "Mulher", renda: "Acima de R$ 3.000", frequencia: "Alta", revenue: 1970, refund: 0, idade: 32, peso: 64, altura: 165 },
-  { id: "2", name: "Carlos Eduardo Souza", email: "carlos.souza@email.com", status: "trinca", objetivo: "Crescer e Secar", sexo: "Homem", renda: "R$ 500 – R$ 1.000", frequencia: "Alta", revenue: 297, refund: 0, idade: 27, peso: 82, altura: 178 },
-  { id: "3", name: "Bruna Martins", email: "bruna.martins@email.com", status: "elite", objetivo: "Secar Muito", sexo: "Mulher", renda: "Acima de R$ 3.000", frequencia: "Baixa", revenue: 1970, refund: 0, idade: 41, peso: 71, altura: 168 },
-  { id: "4", name: "Diego Ramos", email: "diego.ramos@email.com", status: "vencendo", objetivo: "Crescer", sexo: "Homem", renda: "Até R$ 500", frequencia: "Baixa", revenue: 297, refund: 0, idade: 35, peso: 79, altura: 175 },
-  {
-    id: "5",
-    name: "Fernanda Lima",
-    email: "fernanda.lima@email.com",
-    status: "trinca",
-    objetivo: "Crescer e Secar",
-    sexo: "Mulher",
-    renda: "R$ 500 – R$ 1.000",
-    frequencia: "Alta",
-    revenue: 594,
-    refund: 0,
-    idade: 29,
-    peso: 68,
-    altura: 170,
-    cargasRastreadas: [
-      { exercicio: "Supino reto com barra", cargaAtual: "42,5 kg · 4x10" },
-      { exercicio: "Agachamento livre", cargaAtual: "60 kg · 4x10" },
-      { exercicio: "Remada curvada com barra", cargaAtual: "35 kg · 4x10" },
-    ],
-  },
-  { id: "6", name: "Gustavo Pereira", email: "gustavo.pereira@email.com", status: "reembolsada", objetivo: "Secar Muito", sexo: "Homem", renda: "Até R$ 500", frequencia: "Baixa", revenue: 297, refund: 297, idade: 49, peso: 70, altura: 170 },
-  { id: "7", name: "Helena Costa", email: "helena.costa@email.com", status: "sem_acesso", objetivo: "Crescer", sexo: "Mulher", renda: "Até R$ 500", frequencia: "Baixa", revenue: 0, refund: 0, idade: 38, peso: 66, altura: 162 },
-  { id: "8", name: "Igor Almeida", email: "igor.almeida@email.com", status: "elite", objetivo: "Crescer e Secar", sexo: "Homem", renda: "Acima de R$ 3.000", frequencia: "Alta", revenue: 1970, refund: 0, idade: 31, peso: 85, altura: 180 },
-  { id: "9", name: "Juliana Rocha", email: "juliana.rocha@email.com", status: "trinca", objetivo: "Secar Muito", sexo: "Mulher", renda: "R$ 500 – R$ 1.000", frequencia: "Baixa", revenue: 297, refund: 0, idade: 44, peso: 73, altura: 166 },
-  { id: "10", name: "Lucas Barbosa", email: "lucas.barbosa@email.com", status: "trinca", objetivo: "Crescer", sexo: "Homem", renda: "Até R$ 500", frequencia: "Alta", revenue: 297, refund: 0, idade: 24, peso: 74, altura: 176 },
-  { id: "11", name: "Mariana Duarte", email: "mariana.duarte@email.com", status: "vencendo", objetivo: "Crescer e Secar", sexo: "Mulher", renda: "Acima de R$ 3.000", frequencia: "Alta", revenue: 1970, refund: 0, idade: 33, peso: 63, altura: 164 },
-  { id: "12", name: "Rafael Nogueira", email: "rafael.nogueira@email.com", status: "reembolsada", objetivo: "Secar Muito", sexo: "Homem", renda: "Acima de R$ 3.000", frequencia: "Baixa", revenue: 1970, refund: 1970, idade: 52, peso: 91, altura: 174 },
-  { id: "13", name: "Sabrina Teixeira", email: "sabrina.teixeira@email.com", status: "trinca", objetivo: "Crescer", sexo: "Mulher", renda: "R$ 500 – R$ 1.000", frequencia: "Alta", revenue: 297, refund: 0, idade: 26, peso: 60, altura: 160 },
-  { id: "14", name: "Thiago Cardoso", email: "thiago.cardoso@email.com", status: "elite", objetivo: "Crescer e Secar", sexo: "Homem", renda: "R$ 500 – R$ 1.000", frequencia: "Baixa", revenue: 1970, refund: 0, idade: 37, peso: 88, altura: 182 },
-]
+const currencyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
+  day: "2-digit",
+  month: "2-digit",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+})
 
-const QUIZ_QUESTIONS = [
-  "Qual é o seu gênero?",
-  "Qual é a sua idade?",
-  "Qual é a sua altura?",
-  "Qual é o seu peso atual?",
-  "Como está sua composição corporal hoje?",
-  "Qual é a sua experiência com academia?",
-  "Está treinando atualmente?",
-  "Pratica algum outro esporte?",
-  "Qual é o seu principal objetivo com o treino?",
-  "Quanto você gasta por mês com alimentação, suplementos e treinamentos para melhorar o seu físico?",
-  "Qual é a sua urgência para melhorar seu físico?",
-  "Tem alguma dor ou problema físico que precisamos saber?",
-]
+function centsToReais(cents: unknown) {
+  return typeof cents === "number" ? cents / 100 : 0
+}
 
-function buildUserDetail(lead: Lead): UserDetail {
-  const topStatus = lead.status === "reembolsada" || lead.status === "vencendo" || lead.status === "sem_acesso" ? lead.status : null
-  const plano: UserDetail["acessoGestao"]["plano"] = lead.status === "elite" ? "elite" : "trinca"
-  const frequenciaPercent = lead.frequencia === "Alta" ? 62 : 0
+function stringValue(value: unknown) {
+  return typeof value === "string" && value.trim() ? value.trim() : null
+}
 
+function numberValue(value: unknown) {
+  return typeof value === "number" && Number.isFinite(value) ? value : null
+}
+
+function normalizeStatus(accessStatus: string | null | undefined, isActive: boolean): LeadStatus {
+  if (!isActive) return "sem_acesso"
+  if (accessStatus === "elite") return "elite"
+  if (accessStatus === "refunded") return "reembolsada"
+  if (accessStatus === "without_access") return "sem_acesso"
+  if (accessStatus === "expiring") return "vencendo"
+  return "trinca"
+}
+
+function rowToLead(row: AdminUserListRow, rank?: AdminUsersRevenueRankRow): Lead {
   return {
-    id: lead.id,
-    name: lead.name,
-    email: lead.email,
-    topStatus,
-    protocolo:
-      lead.status === "sem_acesso"
-        ? { liberado: false, mensagem: "Aguardando liberação de acesso." }
-        : {
-            liberado: true,
-            mensagem: "Disponível para treinar agora",
-            detalhe: "Treino Experiente - Para Crescer e Secar · 3 dias de treino",
-          },
-    perfilFisico: {
-      idade: lead.idade,
-      sexo: lead.sexo,
-      peso: lead.peso,
-      altura: lead.altura,
-    },
-    acessoGestao: {
-      plano,
-      cargo: "aluno",
-      status: lead.status === "sem_acesso" ? "Inativo" : "Ativo",
-      acesso: "Criado",
-      compra: lead.status === "reembolsada" ? "Reembolsada" : "Pendente",
-      assinatura: lead.status === "vencendo" ? "Vencendo" : "Vencido",
-    },
-    avaliacao: {
-      objetivo: lead.objetivo,
-      avaliacaoInicial: "Concluída",
-      cardVisualizado: false,
-    },
-    treinos: {
-      frequenciaLabel: lead.frequencia,
-      frequenciaPercent,
-    },
-    reavaliacao: {
-      definida: false,
-    },
-    cargas: (lead.cargasRastreadas ?? []).map((item) => ({ exercicio: item.exercicio, cargaAtual: item.cargaAtual })),
-    quiz: {
-      nome: "Quiz inicial",
-      concluidoEm: "29/07/2026",
-      respostas: [
-        { pergunta: QUIZ_QUESTIONS[0], resposta: lead.sexo },
-        { pergunta: QUIZ_QUESTIONS[1], resposta: String(lead.idade) },
-        { pergunta: QUIZ_QUESTIONS[2], resposta: `${lead.altura} cm` },
-        { pergunta: QUIZ_QUESTIONS[3], resposta: `${lead.peso} kg` },
-        { pergunta: QUIZ_QUESTIONS[4], resposta: "Magro com barriga - Corpo fino mas com barriga" },
-        { pergunta: QUIZ_QUESTIONS[5], resposta: "Intermediário - 6 meses a 1 ano de treino" },
-        { pergunta: QUIZ_QUESTIONS[6], resposta: "Não" },
-        { pergunta: QUIZ_QUESTIONS[7], resposta: "Não" },
-        { pergunta: QUIZ_QUESTIONS[8], resposta: `${lead.objetivo} - Ganhar músculo e perder gordura` },
-        { pergunta: QUIZ_QUESTIONS[9], resposta: lead.renda },
-        { pergunta: QUIZ_QUESTIONS[10], resposta: lead.frequencia === "Alta" ? "Muito alta" : "Normal" },
-        { pergunta: QUIZ_QUESTIONS[11], resposta: "Não" },
-      ],
-    },
+    id: row.user_id,
+    name: row.nome_completo,
+    email: row.email,
+    status: normalizeStatus(row.access_status, row.is_active),
+    objetivo: row.objective ?? "",
+    sexo: row.sex ?? "",
+    revenue: centsToReais(rank?.revenue_net_cents),
+    refund: 0,
+    idade: row.age ?? 0,
+    peso: 0,
+    altura: 0,
   }
 }
 
-const MOCK_REAVALIACAO_DIAS = 45
-const MOCK_LAST_APPLIED_TEXT = "Último prazo global aplicado em 14/05/2026, 02:11 (45 dias)"
+function buildQuizAnswers(latestQuizResponse: Record<string, unknown> | null): UserDetail["quiz"] {
+  const respostas = latestQuizResponse?.respostas
+  const completedAt = stringValue(latestQuizResponse?.completed_at)
+  const answers =
+    respostas && typeof respostas === "object" && !Array.isArray(respostas)
+      ? Object.entries(respostas as Record<string, unknown>).map(([pergunta, resposta]) => ({
+          pergunta,
+          resposta: typeof resposta === "string" ? resposta : JSON.stringify(resposta),
+        }))
+      : []
 
-const currencyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
+  return {
+    nome: stringValue(latestQuizResponse?.quiz_type) ?? "Quiz",
+    concluidoEm: completedAt ? dateTimeFormatter.format(new Date(completedAt)) : "Sem resposta registrada",
+    respostas: answers,
+  }
+}
+
+function buildUserDetail(row: AdminUserDetailRow, lead: Lead): UserDetail {
+  const profile = row.user_profile
+  const finance = row.finance_rollup
+  const workout = row.workout_rollup
+  const tier = stringValue(profile.tier)
+  const accessStatus = stringValue(profile.access_status)
+  const isActive = profile.is_active !== false
+  const status = normalizeStatus(accessStatus, isActive)
+  const programName = stringValue(row.current_program?.nome)
+  const programFocus = stringValue(row.current_program?.foco)
+  const frequency = numberValue(workout?.frequencia_semanal)
+
+  return {
+    id: stringValue(profile.user_id) ?? lead.id,
+    name: stringValue(profile.nome_completo) ?? lead.name,
+    email: stringValue(profile.email) ?? lead.email,
+    topStatus: status === "elite" || status === "trinca" ? null : status,
+    protocolo: row.current_program
+      ? {
+          liberado: true,
+          mensagem: "Disponível para treinar agora",
+          detalhe: [programName, programFocus].filter(Boolean).join(" · "),
+        }
+      : { liberado: false, mensagem: "Nenhum protocolo atual encontrado." },
+    perfilFisico: {
+      idade: numberValue(profile.idade) ?? 0,
+      sexo: stringValue(profile.sexo) ?? "—",
+      peso: numberValue(profile.peso_kg) ?? numberValue(profile.peso_mais_recente_kg) ?? 0,
+      altura: numberValue(profile.altura_cm) ?? 0,
+    },
+    acessoGestao: {
+      plano: tier === "elite" ? "elite" : "trinca",
+      cargo: profile.role === "admin" ? "administrador" : "aluno",
+      status: isActive ? "Ativo" : "Inativo",
+      acesso: accessStatus ?? "—",
+      compra: numberValue(finance?.purchase_count) ? "Com compra" : "Sem compra registrada",
+      assinatura: status === "reembolsada" ? "Reembolsada" : "Ativa",
+    },
+    avaliacao: {
+      objetivo: stringValue(profile.objetivo) ?? undefined,
+      avaliacaoInicial: row.latest_quiz_response ? "Concluída" : "Pendente",
+      cardVisualizado: Boolean(row.latest_quiz_response),
+    },
+    treinos: {
+      concluidos: numberValue(workout?.total_concluidos)?.toString(),
+      frequenciaLabel: frequency ? "Com atividade" : "Sem atividade recente",
+      frequenciaPercent: frequency ? Math.min(Math.round(frequency * 100), 100) : 0,
+    },
+    reavaliacao: { definida: false },
+    cargas: [],
+    quiz: buildQuizAnswers(row.latest_quiz_response),
+  }
+}
 
 function StatusBadge({ status }: { status: LeadStatus }) {
   if (status === "elite") return <PlanBadge plan="elite" />
@@ -216,69 +237,140 @@ interface UsuariosPageProps {
 export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
   const [searchParams] = useSearchParams()
   const canEdit = canEditProp ?? searchParams.get("canEdit") !== "false"
-  const forceEmpty = searchParams.get("empty") === "1"
-  const forceLoading = searchParams.get("loading") === "1"
 
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [objetivo, setObjetivo] = useState(ALL)
   const [sexo, setSexo] = useState(ALL)
-  const [renda, setRenda] = useState(ALL)
-  const [frequencia, setFrequencia] = useState(ALL)
   const [status, setStatus] = useState<LeadStatus | typeof ALL>(ALL)
+  const [leads, setLeads] = useState<Lead[]>([])
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
+  const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+  const [detailError, setDetailError] = useState<string | null>(null)
 
-  const [reavaliacaoDias, setReavaliacaoDias] = useState(String(MOCK_REAVALIACAO_DIAS))
-  const [lastAppliedText, setLastAppliedText] = useState(MOCK_LAST_APPLIED_TEXT)
+  const [reavaliacaoDias, setReavaliacaoDias] = useState("")
+  const [lastAppliedText, setLastAppliedText] = useState<string | undefined>()
   const [applyState, setApplyState] = useState<ApplyValueCardApplyState>("idle")
 
   useEffect(() => {
-    if (forceLoading) return
-    const timeout = setTimeout(() => setLoading(false), 700)
-    return () => clearTimeout(timeout)
-  }, [forceLoading])
+    let active = true
 
-  const isLoading = forceLoading || loading
+    async function loadUsers() {
+      setLoading(true)
+      setError(null)
 
-  const stats = useMemo(() => {
-    return {
-      total: MOCK_LEADS.length,
-      trinca: MOCK_LEADS.filter((lead) => lead.status === "trinca").length,
-      elite: MOCK_LEADS.filter((lead) => lead.status === "elite").length,
-      reembolso: MOCK_LEADS.filter((lead) => lead.status === "reembolsada").length,
-      semAcesso: MOCK_LEADS.filter((lead) => lead.status === "sem_acesso").length,
+      try {
+        const [users, rank, settings] = await Promise.all([
+          adminRpc<AdminUserListRow[]>("admin_users_list", { p_limit: 100 }),
+          adminRpc<AdminUsersRevenueRankRow[]>("admin_users_revenue_rank", { p_limit: 100 }),
+          adminRpc<AdminAppSettingsRow[]>("admin_app_settings_current"),
+        ])
+
+        if (!active) return
+
+        const rankByUserId = new Map(rank.map((row) => [row.user_id, row]))
+        setLeads(users.map((row) => rowToLead(row, rankByUserId.get(row.user_id))))
+
+        const reassessmentDays = settings[0]?.reassessment_days
+        if (typeof reassessmentDays === "number") {
+          setReavaliacaoDias(String(reassessmentDays))
+          setLastAppliedText(`Prazo global atual: ${reassessmentDays} dia(s)`)
+        }
+      } catch (loadError) {
+        if (!active) return
+        setLeads([])
+        setError(loadError instanceof Error ? loadError.message : "Erro ao carregar usuários.")
+      } finally {
+        if (active) setLoading(false)
+      }
+    }
+
+    void loadUsers()
+
+    return () => {
+      active = false
     }
   }, [])
 
-  const filteredLeads = useMemo(() => {
-    if (forceEmpty) return []
-    const term = search.trim().toLowerCase()
-    return MOCK_LEADS.filter((lead) => {
-      if (term && !lead.name.toLowerCase().includes(term) && !lead.email.toLowerCase().includes(term)) {
-        return false
-      }
-      if (objetivo !== ALL && lead.objetivo !== objetivo) return false
-      if (sexo !== ALL && lead.sexo !== sexo) return false
-      if (renda !== ALL && lead.renda !== renda) return false
-      if (frequencia !== ALL && lead.frequencia !== frequencia) return false
-      if (status !== ALL && lead.status !== status) return false
-      return true
-    }).sort((a, b) => b.revenue - b.refund - (a.revenue - a.refund))
-  }, [forceEmpty, search, objetivo, sexo, renda, frequencia, status])
+  const objetivoOptions = useMemo(
+    () => Array.from(new Set(leads.map((lead) => lead.objetivo).filter(Boolean))).sort(),
+    [leads]
+  )
+  const sexoOptions = useMemo(
+    () => Array.from(new Set(leads.map((lead) => lead.sexo).filter(Boolean))).sort(),
+    [leads]
+  )
 
-  function handleApplyReavaliacao() {
+  const stats = useMemo(() => {
+    return {
+      total: leads.length,
+      trinca: leads.filter((lead) => lead.status === "trinca").length,
+      elite: leads.filter((lead) => lead.status === "elite").length,
+      reembolso: leads.filter((lead) => lead.status === "reembolsada").length,
+      semAcesso: leads.filter((lead) => lead.status === "sem_acesso").length,
+    }
+  }, [leads])
+
+  const filteredLeads = useMemo(() => {
+    const term = search.trim().toLowerCase()
+    return leads
+      .filter((lead) => {
+        if (term && !lead.name.toLowerCase().includes(term) && !lead.email.toLowerCase().includes(term)) {
+          return false
+        }
+        if (objetivo !== ALL && lead.objetivo !== objetivo) return false
+        if (sexo !== ALL && lead.sexo !== sexo) return false
+        if (status !== ALL && lead.status !== status) return false
+        return true
+      })
+      .sort((a, b) => b.revenue - b.refund - (a.revenue - a.refund))
+  }, [leads, search, objetivo, sexo, status])
+
+  async function handleSelectLead(lead: Lead) {
+    setSelectedLead(lead)
+    setSelectedUserDetail(null)
+    setDetailError(null)
+    setDetailLoading(true)
+
+    try {
+      const rows = await adminRpc<AdminUserDetailRow[]>("admin_user_detail", { p_user_id: lead.id })
+      const detail = rows[0]
+      if (!detail) throw new Error("Usuário não encontrado no detalhe admin.")
+      setSelectedUserDetail(buildUserDetail(detail, lead))
+    } catch (loadError) {
+      setDetailError(loadError instanceof Error ? loadError.message : "Erro ao carregar detalhe do usuário.")
+    } finally {
+      setDetailLoading(false)
+    }
+  }
+
+  async function handleApplyReavaliacao() {
     if (applyState !== "idle") return
+
     const days = Number(reavaliacaoDias)
-    if (!Number.isFinite(days)) return
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      setError("Informe um prazo de reavaliação entre 1 e 365 dias.")
+      return
+    }
+
     setApplyState("loading")
-    setTimeout(() => {
-      const now = new Date()
-      const formattedDate = now.toLocaleDateString("pt-BR")
-      const formattedTime = now.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })
-      setLastAppliedText(`Último prazo global aplicado em ${formattedDate}, ${formattedTime} (${days} dias)`)
+    setError(null)
+
+    try {
+      const response = await adminMutation<{ reassessmentDays: number; updatedAt: string }>(
+        "/admin/settings/reassessment",
+        { method: "PATCH", body: { reassessmentDays: days } }
+      )
+      setLastAppliedText(
+        `Último prazo global aplicado em ${dateTimeFormatter.format(new Date(response.updatedAt))} (${response.reassessmentDays} dias)`
+      )
       setApplyState("success")
-      setTimeout(() => setApplyState("idle"), 1600)
-    }, 900)
+    } catch (mutationError) {
+      setError(mutationError instanceof Error ? mutationError.message : "Erro ao aplicar reavaliação.")
+      setApplyState("idle")
+    }
   }
 
   const dataGridColumns = [
@@ -308,13 +400,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     ]
     if (canEdit) {
       row.push(
-        <Button
-          key="action"
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => setSelectedLead(lead)}
-        >
+        <Button key="action" type="button" size="sm" variant="outline" onClick={() => handleSelectLead(lead)}>
           <Eye className="size-3.5" />
           Ver lead
         </Button>
@@ -328,8 +414,13 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
       <div className="flex flex-1 flex-col gap-6 p-4 md:p-6">
         <EntityListHeader title="Usuários" className="items-start" />
 
-        {/* B — grid de métricas */}
-        {isLoading ? (
+        {error && (
+          <div className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </div>
+        )}
+
+        {loading ? (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
             {Array.from({ length: 5 }, (_, index) => (
               <Skeleton key={index} className="h-24 w-full rounded-lg" />
@@ -345,7 +436,6 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
           </div>
         )}
 
-        {/* C — busca + filtros, sticky, sempre interativa */}
         <div className="sticky top-0 z-10 flex flex-col gap-3 rounded-lg border border-border bg-card p-3 lg:flex-row lg:flex-wrap lg:items-center">
           <SearchInput
             placeholder="Buscar por nome ou e-mail..."
@@ -359,7 +449,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>Todos objetivos</SelectItem>
-              {OBJETIVO_OPTIONS.map((option) => (
+              {objetivoOptions.map((option) => (
                 <SelectItem key={option} value={option}>
                   {option}
                 </SelectItem>
@@ -372,33 +462,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={ALL}>Todos</SelectItem>
-              {SEXO_OPTIONS.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={renda} onValueChange={setRenda}>
-            <SelectTrigger className="w-full lg:w-[190px]">
-              <SelectValue placeholder="Renda" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Todas rendas</SelectItem>
-              {RENDA_OPTIONS.map((option) => (
-                <SelectItem key={option} value={option}>
-                  {option}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select value={frequencia} onValueChange={setFrequencia}>
-            <SelectTrigger className="w-full lg:w-[150px]">
-              <SelectValue placeholder="Frequência" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Todas</SelectItem>
-              {FREQUENCIA_OPTIONS.map((option) => (
+              {sexoOptions.map((option) => (
                 <SelectItem key={option} value={option}>
                   {option}
                 </SelectItem>
@@ -420,8 +484,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
           </Select>
         </div>
 
-        {/* D — ranking por faturamento total (receita − reembolso) */}
-        {isLoading ? (
+        {loading ? (
           <div className="space-y-2 rounded-md border border-border p-3">
             {Array.from({ length: 6 }, (_, index) => (
               <Skeleton key={index} className="h-10 w-full" />
@@ -433,27 +496,45 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
           <DataGrid columns={dataGridColumns} data={dataGridRows} />
         )}
 
-        {/* E — prazo de avaliação global */}
-        {isLoading ? (
+        {loading ? (
           <Skeleton className="h-40 w-full rounded-lg" />
         ) : (
           <ApplyValueCard
             title="Prazo de avaliação global"
-            description="Dias para reset automático de protocolo, mapeado nos 6 tipos de protocolo existentes (versão inicial = versão A)."
+            description="Dias para reset automático de protocolo, usando a configuração real do backend."
             label="Prazo global de avaliação (em dias)"
             value={reavaliacaoDias}
             onChange={setReavaliacaoDias}
             onApply={handleApplyReavaliacao}
             canApply={canEdit}
             applyState={applyState}
-            helpText={`Ao aplicar, todos os alunos passam a ter o protocolo resetado a cada ${reavaliacaoDias || 0} dia(s) — mesmo campo usado em Configurações.`}
+            helpText={`Ao aplicar, todos os alunos passam a ter o protocolo resetado a cada ${reavaliacaoDias || 0} dia(s).`}
             lastAppliedText={lastAppliedText}
           />
         )}
       </div>
 
       {selectedLead && (
-        <UserDetailModal user={buildUserDetail(selectedLead)} canEdit={canEdit} onClose={() => setSelectedLead(null)} />
+        detailLoading ? (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-background/80">
+            <Skeleton className="h-40 w-full max-w-xl rounded-lg" />
+          </div>
+        ) : detailError ? (
+          <div className="fixed inset-0 z-50 grid place-items-center bg-background/80 p-4">
+            <div className="max-w-md rounded-lg border border-destructive/40 bg-card p-4 text-sm text-destructive">
+              {detailError}
+              <Button type="button" variant="outline" className="mt-3 w-full" onClick={() => setSelectedLead(null)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        ) : selectedUserDetail ? (
+          <UserDetailModal
+            user={selectedUserDetail}
+            canEdit={canEdit}
+            onClose={() => setSelectedLead(null)}
+          />
+        ) : null
       )}
     </div>
   )
