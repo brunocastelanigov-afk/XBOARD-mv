@@ -365,6 +365,9 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   const [exerciseCatalogFull, setExerciseCatalogFull] = useState<AdminExerciseCatalogRow[]>([])
   const [expandedProgramExerciseKey, setExpandedProgramExerciseKey] = useState<string | null>(null)
   const [expandedProtocolDayIndex, setExpandedProtocolDayIndex] = useState<number | null>(null)
+  const [modalStep, setModalStep] = useState<"1. Dados do protocolo" | "2. Treinos e exercícios">(
+    "1. Dados do protocolo"
+  )
   const [exercisePickerQuery, setExercisePickerQuery] = useState("")
 
   const exerciseCatalog = useMemo(() => exerciseCatalogFromTemplates(templates), [templates])
@@ -473,6 +476,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setSaveState("idle")
     setExpandedProtocolDayIndex(null)
     setExpandedProgramExerciseKey(null)
+    setModalStep("1. Dados do protocolo")
     setModalMode("create")
   }
 
@@ -483,6 +487,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setSaveState("idle")
     setExpandedProtocolDayIndex(null)
     setExpandedProgramExerciseKey(null)
+    setModalStep("1. Dados do protocolo")
     setModalMode("edit")
   }
 
@@ -537,6 +542,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setModalError(null)
     setExpandedProtocolDayIndex(null)
     setExpandedProgramExerciseKey(null)
+    setModalStep("1. Dados do protocolo")
     setExercisePickerQuery("")
   }
 
@@ -1054,68 +1060,73 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                 { label: "1. Dados do protocolo", icon: FileStack },
                 { label: "2. Treinos e exercícios", icon: Dumbbell },
               ]}
-              active="1. Dados do protocolo"
-              onActiveChange={() => undefined}
+              active={modalStep}
+              onActiveChange={(value) => setModalStep(value as typeof modalStep)}
             />
 
-            <Input
-              placeholder="Nome"
-              value={protocolFormState.nome}
-              onChange={(event) => updateProtocolForm({ nome: event.target.value })}
-            />
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <Input
-                placeholder="Categoria"
-                value={protocolFormState.categoria}
-                onChange={(event) => updateProtocolForm({ categoria: event.target.value.toUpperCase() })}
-              />
-              <Select
-                value={protocolFormState.nivel}
-                onValueChange={(value) => updateProtocolForm({ nivel: value as NivelApi })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Nível" />
-                </SelectTrigger>
-                <SelectContent>
-                  {NIVEL_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <Select
-                value={protocolFormState.objetivo}
-                onValueChange={(value) => updateProtocolForm({ objetivo: value as ObjetivoApi })}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Objetivo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {OBJETIVO_OPTIONS.map((option) => (
-                    <SelectItem key={option.value} value={option.value}>
-                      {option.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <Input
-              placeholder="Etiqueta"
-              value={protocolFormState.etiqueta}
-              onChange={(event) => updateProtocolForm({ etiqueta: event.target.value })}
-            />
-            <Textarea
-              placeholder="Descrição"
-              value={protocolFormState.descricao}
-              onChange={(event) => updateProtocolForm({ descricao: event.target.value })}
-            />
-            <StepperInput
-              value={protocolFormState.duracaoMinutos ?? 0}
-              min={0}
-              onChange={(value) => updateProtocolForm({ duracaoMinutos: value || null })}
-            />
+            {modalStep === "1. Dados do protocolo" && (
+              <div className="space-y-4">
+                <Input
+                  placeholder="Nome"
+                  value={protocolFormState.nome}
+                  onChange={(event) => updateProtocolForm({ nome: event.target.value })}
+                />
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <Input
+                    placeholder="Categoria"
+                    value={protocolFormState.categoria}
+                    onChange={(event) => updateProtocolForm({ categoria: event.target.value.toUpperCase() })}
+                  />
+                  <Select
+                    value={protocolFormState.nivel}
+                    onValueChange={(value) => updateProtocolForm({ nivel: value as NivelApi })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Nível" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {NIVEL_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Select
+                    value={protocolFormState.objetivo}
+                    onValueChange={(value) => updateProtocolForm({ objetivo: value as ObjetivoApi })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Objetivo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OBJETIVO_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <Input
+                  placeholder="Etiqueta"
+                  value={protocolFormState.etiqueta}
+                  onChange={(event) => updateProtocolForm({ etiqueta: event.target.value })}
+                />
+                <Textarea
+                  placeholder="Descrição"
+                  value={protocolFormState.descricao}
+                  onChange={(event) => updateProtocolForm({ descricao: event.target.value })}
+                />
+                <StepperInput
+                  value={protocolFormState.duracaoMinutos ?? 0}
+                  min={0}
+                  onChange={(value) => updateProtocolForm({ duracaoMinutos: value || null })}
+                />
+              </div>
+            )}
 
+            {modalStep === "2. Treinos e exercícios" && (
             <div className="space-y-3">
               <div className="flex items-center justify-between gap-3">
                 <h3 className="text-sm font-semibold">Treinos e exercícios</h3>
@@ -1242,7 +1253,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                               />
                                             </div>
 
-                                            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                            <div className="space-y-4">
                                               <label className="block space-y-1.5">
                                                 <span className="text-xs font-medium uppercase text-muted-foreground">
                                                   Séries
@@ -1317,6 +1328,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                 )
               })}
             </div>
+            )}
           </div>
         </EntityEditModalShell>
       )}
@@ -1463,7 +1475,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                                 />
                                               </div>
 
-                                              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                                              <div className="space-y-4">
                                                 <label className="block space-y-1.5">
                                                   <span className="text-xs font-medium uppercase text-muted-foreground">Séries</span>
                                                   <StepperInput
