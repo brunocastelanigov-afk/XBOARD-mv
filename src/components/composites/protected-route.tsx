@@ -2,8 +2,22 @@ import { Navigate, useLocation } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 import type { ReactNode } from "react"
 
-export function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { loading, session, isAllowedTeamUser } = useAuth()
+const GROUP_HOME: Record<"crm" | "traffic", string> = {
+  crm: "/crm/dashboard",
+  traffic: "/roi-campanhas",
+}
+
+export function ProtectedRoute({
+  children,
+  group,
+}: {
+  children: ReactNode
+  /** Restricts this route subtree to accounts of the given role group (Story 15.4). Omit for
+   * routes with no group in the Story 15.1 list (e.g. /crm/relatorios) — same behavior as
+   * before this story, no role check. */
+  group?: "crm" | "traffic"
+}) {
+  const { loading, session, isAllowedTeamUser, isCrmRole } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -20,6 +34,13 @@ export function ProtectedRoute({ children }: { children: ReactNode }) {
 
   if (!isAllowedTeamUser) {
     return <Navigate to="/login" replace state={{ reason: "forbidden" }} />
+  }
+
+  if (group) {
+    const accountGroup: "crm" | "traffic" = isCrmRole ? "crm" : "traffic"
+    if (accountGroup !== group) {
+      return <Navigate to={GROUP_HOME[accountGroup]} replace />
+    }
   }
 
   return <>{children}</>
