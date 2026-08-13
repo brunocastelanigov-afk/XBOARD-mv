@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { ArrowDown, ArrowUp, BookOpen, FlaskConical, ListChecks, Plus, Trash2 } from "lucide-react"
 
+import { Badge } from "@/components/atoms/badge"
 import { Button } from "@/components/atoms/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/atoms/card"
 import { EmptyState } from "@/components/atoms/empty-state"
@@ -16,17 +17,26 @@ import {
 import { Skeleton } from "@/components/atoms/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/atoms/tabs"
 import { Textarea } from "@/components/atoms/textarea"
-import { Badge } from "@/components/atoms/badge"
 import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
 import { FieldReferenceTable } from "@/components/composites/field-reference-table"
 import { OverrideRuleCard } from "@/components/composites/override-rule-card"
 import { QuickProfileButtonGrid, type QuickProfile } from "@/components/composites/quick-profile-button-grid"
+import { adminMutation, adminRpc, adminSelect } from "@/lib/admin-crm-api"
+
+type NivelResultado = "iniciante" | "avancado"
+type RuleOperator = "eq" | "gte" | "lte"
 
 interface RuleCondition {
   field: string
-  operator: string
+  operator: RuleOperator
   value: string
+}
+
+interface ApiRuleCondition {
+  campo: string
+  operador: RuleOperator
+  valor: string
 }
 
 interface OverrideRule {
@@ -34,154 +44,55 @@ interface OverrideRule {
   priority: number
   name: string
   conditions: RuleCondition[]
-  result: string
-  program?: string
+  result: NivelResultado
   override: boolean
   active: boolean
   description?: string
 }
 
-const FIELD_OPTIONS = [
-  "experiencia",
-  "idade",
-  "dor_saude",
-  "treinando",
-  "objetivo",
-  "urgencia",
-  "gasto_mensal",
-  "genero",
-]
-
-const OPERATOR_OPTIONS = [
-  { value: "igual a", label: "= igual a" },
-  { value: ">=", label: ">= maior ou igual" },
-  { value: "<=", label: "<= menor ou igual" },
-]
-
-const LEVEL_OPTIONS = ["Iniciante", "Intermediário", "Avançado"]
-
-const MOCK_RULES: OverrideRule[] = [
-  {
-    id: "iniciante-experiencia",
-    priority: 1,
-    name: "Iniciante por Experiência",
-    conditions: [{ field: "experiencia", operator: "igual a", value: "iniciante" }],
-    result: "Iniciante",
-    override: false,
-    active: true,
-    description: "Usuários sem experiência ou com menos de 6 meses.",
-  },
-  {
-    id: "forcar-iniciante-idade",
-    priority: 2,
-    name: "Forçar Iniciante — Idade 55+",
-    conditions: [{ field: "idade", operator: ">=", value: "55" }],
-    result: "Iniciante",
-    override: true,
-    active: true,
-    description: "Maiores de 55 anos são alocados no protocolo iniciante por segurança.",
-  },
-  {
-    id: "forcar-iniciante-dor",
-    priority: 10,
-    name: "Forçar Iniciante — Dor ou Lesão",
-    conditions: [{ field: "dor_saude", operator: "igual a", value: "Sim" }],
-    result: "Iniciante",
-    override: true,
-    active: true,
-    description: "Qualquer usuário com dor/lesão é forçado para nível iniciante independente de outras regras.",
-  },
-  {
-    id: "intermediario-experiencia",
-    priority: 20,
-    name: "Intermediário por Experiência",
-    conditions: [{ field: "experiencia", operator: "igual a", value: "intermediario" }],
-    result: "Intermediário",
-    override: false,
-    active: true,
-  },
-]
-
-function emptyRuleForm(nextPriority: number): {
-  name: string
-  priority: string
-  conditions: RuleCondition[]
-  result: string
-  program: string
+interface AdminRuleRow {
+  rule_id: string
+  nome: string
+  descricao: string | null
+  prioridade: number
+  condicoes: ApiRuleCondition[]
+  nivel_resultado: NivelResultado
   override: boolean
-  description: string
-} {
-  return {
-    name: "",
-    priority: String(nextPriority),
-    conditions: [{ field: FIELD_OPTIONS[0], operator: OPERATOR_OPTIONS[0].value, value: "" }],
-    result: LEVEL_OPTIONS[0],
-    program: "",
-    override: false,
-    description: "",
-  }
+  ativo: boolean
 }
 
-function ruleToForm(rule: OverrideRule): ReturnType<typeof emptyRuleForm> {
-  return {
-    name: rule.name,
-    priority: String(rule.priority),
-    conditions: rule.conditions.map((condition) => ({ ...condition })),
-    result: rule.result,
-    program: rule.program ?? "",
-    override: rule.override,
-    description: rule.description ?? "",
-  }
+interface AdminRuleResponse {
+  ruleId: string
+  nome: string
+  descricao: string | null
+  prioridade: number
+  condicoes: ApiRuleCondition[]
+  nivelResultado: NivelResultado
+  override: boolean
+  ativo: boolean
 }
 
-const FIELD_ROWS = [
-  {
-    CAMPO: "experiencia",
-    "PERGUNTA NO QUIZ": "Q6 – Experiência com academia",
-    "VALORES ACEITOS": "iniciante · intermediario · avancado",
-  },
-  {
-    CAMPO: "idade",
-    "PERGUNTA NO QUIZ": "Q2 – Idade (número)",
-    "VALORES ACEITOS": "ex: 18, 25, 55 — use operadores >= ou <=",
-  },
-  {
-    CAMPO: "dor_saude",
-    "PERGUNTA NO QUIZ": "Q21 – Tem dor ou problema físico?",
-    "VALORES ACEITOS": "Sim · Não",
-  },
-  {
-    CAMPO: "treinando",
-    "PERGUNTA NO QUIZ": "Q7 – Está treinando atualmente?",
-    "VALORES ACEITOS": "Sim · Não",
-  },
-  {
-    CAMPO: "objetivo",
-    "PERGUNTA NO QUIZ": "Q10 – Objetivo principal",
-    "VALORES ACEITOS": "Crescer · Secar Muito · Crescer e Secar",
-  },
-  {
-    CAMPO: "urgencia",
-    "PERGUNTA NO QUIZ": "Q14 – Urgência",
-    "VALORES ACEITOS": "Muito alta · Alta · Média · Normal",
-  },
-  {
-    CAMPO: "gasto_mensal",
-    "PERGUNTA NO QUIZ": "Q15 – Gasto mensal",
-    "VALORES ACEITOS": "Até R$ 500 · R$ 500 – R$ 1.000 · Acima de R$ 3.000",
-  },
-  { CAMPO: "genero", "PERGUNTA NO QUIZ": "Q1 – Gênero", "VALORES ACEITOS": "Homem · Mulher" },
+interface QuizFieldRow {
+  campo: string
+  label: string
+  tipo: string
+  valores_permitidos: string[] | null
+}
+
+interface TestResponse {
+  nivel: NivelResultado
+  fieldValues: Record<string, string>
+}
+
+const OPERATOR_OPTIONS: { value: RuleOperator; label: string }[] = [
+  { value: "eq", label: "= igual a" },
+  { value: "gte", label: ">= maior ou igual" },
+  { value: "lte", label: "<= menor ou igual" },
 ]
 
-const TESTER_FIELDS: { key: string; label: string }[] = [
-  { key: "genero", label: "Gênero (q1)" },
-  { key: "idade", label: "Idade (q2)" },
-  { key: "experiencia", label: "Experiência (q6)" },
-  { key: "treinando", label: "Treinando? (q7)" },
-  { key: "objetivo", label: "Objetivo (q10)" },
-  { key: "urgencia", label: "Urgência (q14)" },
-  { key: "gasto_mensal", label: "Gasto mensal (q15)" },
-  { key: "dor_saude", label: "Dor/Saúde (q21)" },
+const LEVEL_OPTIONS: { value: NivelResultado; label: string }[] = [
+  { value: "iniciante", label: "Iniciante" },
+  { value: "avancado", label: "Avançado" },
 ]
 
 const QUICK_PROFILES: QuickProfile[] = [
@@ -190,7 +101,7 @@ const QUICK_PROFILES: QuickProfile[] = [
     values: {
       genero: "Homem",
       idade: "25",
-      experiencia: "iniciante",
+      experiencia: "Iniciante",
       treinando: "Sim",
       objetivo: "Crescer",
       urgencia: "Alta",
@@ -199,24 +110,11 @@ const QUICK_PROFILES: QuickProfile[] = [
     },
   },
   {
-    label: "Intermediário, 30 anos",
-    values: {
-      genero: "Mulher",
-      idade: "30",
-      experiencia: "intermediario",
-      treinando: "Sim",
-      objetivo: "Crescer e Secar",
-      urgencia: "Média",
-      gasto_mensal: "R$ 500 – R$ 1.000",
-      dor_saude: "Não",
-    },
-  },
-  {
-    label: "Avançado, 35 anos",
+    label: "Experiente, 35 anos",
     values: {
       genero: "Homem",
       idade: "35",
-      experiencia: "avancado",
+      experiencia: "Experiente",
       treinando: "Sim",
       objetivo: "Secar Muito",
       urgencia: "Normal",
@@ -225,11 +123,11 @@ const QUICK_PROFILES: QuickProfile[] = [
     },
   },
   {
-    label: "Sênior 60 anos (deve forçar iniciante)",
+    label: "Sênior 60 anos",
     values: {
       genero: "Mulher",
       idade: "60",
-      experiencia: "avancado",
+      experiencia: "Experiente",
       treinando: "Sim",
       objetivo: "Crescer",
       urgencia: "Alta",
@@ -238,11 +136,11 @@ const QUICK_PROFILES: QuickProfile[] = [
     },
   },
   {
-    label: "Com dor/lesão (deve forçar iniciante)",
+    label: "Com dor/lesão",
     values: {
       genero: "Homem",
       idade: "30",
-      experiencia: "avancado",
+      experiencia: "Experiente",
       treinando: "Sim",
       objetivo: "Crescer",
       urgencia: "Alta",
@@ -252,24 +150,97 @@ const QUICK_PROFILES: QuickProfile[] = [
   },
 ]
 
+function nivelLabel(value: string) {
+  return LEVEL_OPTIONS.find((option) => option.value === value)?.label ?? value
+}
+
+function operatorLabel(value: RuleOperator) {
+  return OPERATOR_OPTIONS.find((option) => option.value === value)?.label ?? value
+}
+
+function rowToRule(row: AdminRuleRow): OverrideRule {
+  return {
+    id: row.rule_id,
+    priority: row.prioridade,
+    name: row.nome,
+    conditions: row.condicoes.map((condition) => ({
+      field: condition.campo,
+      operator: condition.operador,
+      value: condition.valor,
+    })),
+    result: row.nivel_resultado,
+    override: row.override,
+    active: row.ativo,
+    description: row.descricao ?? undefined,
+  }
+}
+
+function responseToRule(row: AdminRuleResponse): OverrideRule {
+  return {
+    id: row.ruleId,
+    priority: row.prioridade,
+    name: row.nome,
+    conditions: row.condicoes.map((condition) => ({
+      field: condition.campo,
+      operator: condition.operador,
+      value: condition.valor,
+    })),
+    result: row.nivelResultado,
+    override: row.override,
+    active: row.ativo,
+    description: row.descricao ?? undefined,
+  }
+}
+
+function conditionsToPayload(conditions: RuleCondition[]): ApiRuleCondition[] {
+  return conditions.map((condition) => ({
+    campo: condition.field,
+    operador: condition.operator,
+    valor: condition.value,
+  }))
+}
+
+function emptyRuleForm(nextPriority: number, firstField: string): {
+  name: string
+  priority: string
+  conditions: RuleCondition[]
+  result: NivelResultado
+  override: boolean
+  description: string
+} {
+  return {
+    name: "",
+    priority: String(nextPriority),
+    conditions: [{ field: firstField, operator: OPERATOR_OPTIONS[0].value, value: "" }],
+    result: LEVEL_OPTIONS[0].value,
+    override: false,
+    description: "",
+  }
+}
+
+function ruleToForm(rule: OverrideRule, firstField: string): ReturnType<typeof emptyRuleForm> {
+  return {
+    name: rule.name,
+    priority: String(rule.priority),
+    conditions: rule.conditions.length > 0 ? rule.conditions.map((condition) => ({ ...condition })) : [
+      { field: firstField, operator: OPERATOR_OPTIONS[0].value, value: "" },
+    ],
+    result: rule.result,
+    override: rule.override,
+    description: rule.description ?? "",
+  }
+}
+
 function singleConditionLabel(condition: RuleCondition) {
-  return `${condition.field} ${condition.operator} "${condition.value}"`
+  return `${condition.field} ${operatorLabel(condition.operator)} "${condition.value}"`
 }
 
 function conditionLabel(rule: OverrideRule) {
   return rule.conditions.map(singleConditionLabel).join(" E ")
 }
 
-function conditionMatches(condition: RuleCondition, profile: Record<string, string>): boolean {
-  const fieldValue = profile[condition.field]
-  if (!fieldValue) return false
-  if (condition.operator === ">=") return Number(fieldValue) >= Number(condition.value)
-  if (condition.operator === "<=") return Number(fieldValue) <= Number(condition.value)
-  return fieldValue.trim().toLowerCase() === condition.value.trim().toLowerCase()
-}
-
-function ruleMatches(rule: OverrideRule, profile: Record<string, string>): boolean {
-  return rule.conditions.every((condition) => conditionMatches(condition, profile))
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Nao foi possivel concluir a operacao."
 }
 
 interface RegrasPageProps {
@@ -283,74 +254,133 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
   const forceLoading = searchParams.get("loading") === "1"
 
   const [loading, setLoading] = useState(true)
-  const [rules, setRules] = useState<OverrideRule[]>(MOCK_RULES)
+  const [error, setError] = useState<string | null>(null)
+  const [rules, setRules] = useState<OverrideRule[]>([])
+  const [fields, setFields] = useState<QuizFieldRow[]>([])
   const [deletingRule, setDeletingRule] = useState<OverrideRule | null>(null)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [ruleModalOpen, setRuleModalOpen] = useState(false)
-  const [ruleForm, setRuleForm] = useState(emptyRuleForm(10))
+  const firstField = fields[0]?.campo ?? "genero"
+  const [ruleForm, setRuleForm] = useState(emptyRuleForm(10, firstField))
   const [testProfile, setTestProfile] = useState<Record<string, string>>({})
-  const [tested, setTested] = useState(false)
+  const [testResult, setTestResult] = useState<TestResponse | null>(null)
+  const [testError, setTestError] = useState<string | null>(null)
+  const [testing, setTesting] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
+  async function loadData() {
+    setLoading(true)
+    setError(null)
+    try {
+      const [ruleRows, fieldRows] = await Promise.all([
+        adminRpc<AdminRuleRow[]>("admin_classification_rules_list"),
+        adminSelect<QuizFieldRow[]>("admin_quiz_fields", "campo,label,tipo,valores_permitidos"),
+      ])
+      setRules(ruleRows.map(rowToRule))
+      setFields(fieldRows)
+    } catch (loadError) {
+      setError(errorMessage(loadError))
+      setRules([])
+      setFields([])
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (forceLoading) return
-    const timeout = setTimeout(() => setLoading(false), 700)
-    return () => clearTimeout(timeout)
+    void loadData()
   }, [forceLoading])
 
   const isLoading = forceLoading || loading
   const list = forceEmpty ? [] : rules
   const sortedRules = useMemo(() => [...list].sort((a, b) => a.priority - b.priority), [list])
   const activeCount = sortedRules.filter((rule) => rule.active).length
+  const testerFields = fields.length > 0 ? fields : []
+  const fieldRows = fields.map((field) => ({
+    CAMPO: field.campo,
+    "PERGUNTA NO QUIZ": field.label,
+    "VALORES ACEITOS": field.valores_permitidos?.join(" · ") ?? field.tipo,
+  }))
 
-  const matchedRule = useMemo(
-    () => sortedRules.find((rule) => ruleMatches(rule, testProfile)) ?? null,
-    [sortedRules, testProfile]
-  )
-
-  function moveRule(id: string, direction: "up" | "down") {
-    setRules((current) => {
-      const sorted = [...current].sort((a, b) => a.priority - b.priority)
-      const index = sorted.findIndex((rule) => rule.id === id)
-      const targetIndex = direction === "up" ? index - 1 : index + 1
-      if (index === -1 || targetIndex < 0 || targetIndex >= sorted.length) return current
-      const a = sorted[index]
-      const b = sorted[targetIndex]
-      return current.map((rule) => {
-        if (rule.id === a.id) return { ...rule, priority: b.priority }
-        if (rule.id === b.id) return { ...rule, priority: a.priority }
-        return rule
-      })
+  async function patchRule(rule: OverrideRule, payload: Partial<{
+    nome: string
+    descricao: string | null
+    prioridade: number
+    condicoes: ApiRuleCondition[]
+    nivelResultado: NivelResultado
+    override: boolean
+    ativo: boolean
+  }>) {
+    const updated = await adminMutation<AdminRuleResponse>(`/admin/classification-rules/${rule.id}`, {
+      method: "PATCH",
+      body: payload,
     })
+    setRules((current) => current.map((item) => (item.id === rule.id ? responseToRule(updated) : item)))
   }
 
-  function toggleActive(id: string) {
-    setRules((current) =>
-      current.map((rule) => (rule.id === id ? { ...rule, active: !rule.active } : rule))
-    )
+  async function moveRule(id: string, direction: "up" | "down") {
+    const sorted = [...rules].sort((a, b) => a.priority - b.priority)
+    const index = sorted.findIndex((rule) => rule.id === id)
+    const targetIndex = direction === "up" ? index - 1 : index + 1
+    if (index === -1 || targetIndex < 0 || targetIndex >= sorted.length) return
+    const a = sorted[index]
+    const b = sorted[targetIndex]
+    setError(null)
+    try {
+      await Promise.all([
+        patchRule(a, { prioridade: b.priority }),
+        patchRule(b, { prioridade: a.priority }),
+      ])
+    } catch (moveError) {
+      setError(errorMessage(moveError))
+    }
   }
 
-  function handleConfirmDelete() {
-    if (!deletingRule) return
-    setRules((current) => current.filter((rule) => rule.id !== deletingRule.id))
-    setDeletingRule(null)
+  async function toggleActive(rule: OverrideRule) {
+    setError(null)
+    try {
+      await patchRule(rule, { ativo: !rule.active })
+    } catch (toggleError) {
+      setError(errorMessage(toggleError))
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!deletingRule || deleteLoading) return
+    setDeleteLoading(true)
+    setError(null)
+    try {
+      await adminMutation<{ ruleId: string; deleted: boolean }>(`/admin/classification-rules/${deletingRule.id}`, {
+        method: "DELETE",
+      })
+      setRules((current) => current.filter((rule) => rule.id !== deletingRule.id))
+      setDeletingRule(null)
+    } catch (deleteError) {
+      setError(errorMessage(deleteError))
+    } finally {
+      setDeleteLoading(false)
+    }
   }
 
   function openNewRuleModal() {
     const nextPriority = sortedRules.length > 0 ? sortedRules[sortedRules.length - 1].priority + 10 : 10
     setEditingId(null)
-    setRuleForm(emptyRuleForm(nextPriority))
+    setRuleForm(emptyRuleForm(nextPriority, firstField))
     setRuleModalOpen(true)
   }
 
   function openEditRuleModal(rule: OverrideRule) {
     setEditingId(rule.id)
-    setRuleForm(ruleToForm(rule))
+    setRuleForm(ruleToForm(rule, firstField))
     setRuleModalOpen(true)
   }
 
   function closeRuleModal() {
     setRuleModalOpen(false)
     setEditingId(null)
+    setSaving(false)
   }
 
   function updateConditionField(index: number, patch: Partial<RuleCondition>) {
@@ -367,7 +397,7 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
       ...current,
       conditions: [
         ...current.conditions,
-        { field: FIELD_OPTIONS[0], operator: OPERATOR_OPTIONS[0].value, value: "" },
+        { field: firstField, operator: OPERATOR_OPTIONS[0].value, value: "" },
       ],
     }))
   }
@@ -379,38 +409,76 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
     }))
   }
 
-  function handleSubmitRule(event: React.FormEvent) {
+  async function handleSubmitRule(event: React.FormEvent) {
     event.preventDefault()
+    if (saving) return
+    setSaving(true)
+    setError(null)
+
     const priority = Number(ruleForm.priority)
-    const nextRule: OverrideRule = {
-      id: editingId ?? `mock-${Date.now()}`,
-      priority: Number.isFinite(priority) ? priority : 0,
-      name: ruleForm.name || "Nova regra",
-      conditions: ruleForm.conditions,
-      result: ruleForm.result,
-      program: ruleForm.program || undefined,
+    const payload = {
+      nome: ruleForm.name,
+      descricao: ruleForm.description || null,
+      prioridade: Number.isFinite(priority) ? priority : 1,
+      condicoes: conditionsToPayload(ruleForm.conditions),
+      nivelResultado: ruleForm.result,
       override: ruleForm.override,
-      active: editingId ? (rules.find((rule) => rule.id === editingId)?.active ?? true) : true,
-      description: ruleForm.description || undefined,
+      ativo: editingId ? (rules.find((rule) => rule.id === editingId)?.active ?? true) : true,
     }
 
-    if (editingId) {
-      setRules((current) => current.map((rule) => (rule.id === editingId ? nextRule : rule)))
-    } else {
-      setRules((current) => [...current, nextRule])
+    try {
+      const saved = editingId
+        ? await adminMutation<AdminRuleResponse>(`/admin/classification-rules/${editingId}`, {
+            method: "PATCH",
+            body: payload,
+          })
+        : await adminMutation<AdminRuleResponse>("/admin/classification-rules", {
+            method: "POST",
+            body: payload,
+          })
+      const nextRule = responseToRule(saved)
+      setRules((current) =>
+        editingId
+          ? current.map((rule) => (rule.id === editingId ? nextRule : rule))
+          : [...current, nextRule]
+      )
+      closeRuleModal()
+    } catch (submitError) {
+      setError(errorMessage(submitError))
+      setSaving(false)
     }
-
-    closeRuleModal()
   }
 
   function applyQuickProfile(profile: QuickProfile) {
     setTestProfile(profile.values)
-    setTested(false)
+    setTestResult(null)
+    setTestError(null)
   }
 
   function updateTestField(key: string, value: string) {
     setTestProfile((current) => ({ ...current, [key]: value }))
-    setTested(false)
+    setTestResult(null)
+    setTestError(null)
+  }
+
+  async function testClassification() {
+    setTesting(true)
+    setTestResult(null)
+    setTestError(null)
+    try {
+      const respostas = Object.entries(testProfile)
+        .filter(([, resposta]) => resposta.trim() !== "")
+        .map(([pergunta, resposta]) => ({ pergunta, resposta }))
+      const result = await adminMutation<TestResponse>("/admin/classification-rules/test", {
+        method: "POST",
+        body: { respostas },
+      })
+      setTestResult(result)
+    } catch (testRequestError) {
+      setTestError(errorMessage(testRequestError))
+    } finally {
+      setTesting(false)
+    }
   }
 
   return (
@@ -426,25 +494,29 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
           {sortedRules.length === 1 ? "" : "s"} · {activeCount} ativa{activeCount === 1 ? "" : "s"}
         </p>
 
+        {error && (
+          <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {error}
+          </p>
+        )}
+
         <Card>
           <CardContent className="space-y-3">
             <CardTitle className="text-base">Como funciona o sistema de regras</CardTitle>
             <div className="grid grid-cols-1 gap-3 text-sm text-muted-foreground md:grid-cols-3">
               <p>
                 <span className="font-semibold text-primary">1. </span>
-                O sistema avalia todas as regras ativas em ordem de{" "}
-                <span className="font-semibold text-foreground">prioridade</span> (número menor = avaliada
-                primeiro).
+                O sistema avalia regras ativas em ordem de{" "}
+                <span className="font-semibold text-foreground">prioridade</span>.
               </p>
               <p>
-                <span className="font-semibold text-primary">2. </span>A{" "}
-                <span className="font-semibold text-foreground">primeira regra que bater</span> com o
-                perfil do usuário define o nível dele (Iniciante, Intermediário ou Avançado).
+                <span className="font-semibold text-primary">2. </span>
+                O resultado exibido pelo testador vem do endpoint real do backend.
               </p>
               <p>
                 <span className="font-semibold text-destructive">3. </span>
                 Regras marcadas como <span className="font-semibold text-destructive">Override</span>{" "}
-                forçam o resultado e ignoram todas as outras — mesmo que outra regra também bata.
+                continuam com precedência na geração real.
               </p>
             </div>
           </CardContent>
@@ -495,7 +567,7 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
                         size="icon-sm"
                         variant="ghost"
                         disabled={index === 0}
-                        onClick={() => moveRule(rule.id, "up")}
+                        onClick={() => void moveRule(rule.id, "up")}
                         aria-label={`Subir prioridade de "${rule.name}"`}
                       >
                         <ArrowUp />
@@ -505,7 +577,7 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
                         size="icon-sm"
                         variant="ghost"
                         disabled={index === sortedRules.length - 1}
-                        onClick={() => moveRule(rule.id, "down")}
+                        onClick={() => void moveRule(rule.id, "down")}
                         aria-label={`Descer prioridade de "${rule.name}"`}
                       >
                         <ArrowDown />
@@ -516,10 +588,10 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
                     <OverrideRuleCard
                       priority={rule.priority}
                       condition={`${rule.name} — ${conditionLabel(rule)}`}
-                      result={rule.result}
+                      result={nivelLabel(rule.result)}
                       override={rule.override}
                       active={rule.active}
-                      onToggleActive={canEdit ? () => toggleActive(rule.id) : undefined}
+                      onToggleActive={canEdit ? () => void toggleActive(rule) : undefined}
                       onEdit={canEdit ? () => openEditRuleModal(rule) : undefined}
                       onDelete={canEdit ? () => setDeletingRule(rule) : undefined}
                     />
@@ -537,8 +609,7 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
               <CardHeader className="space-y-1 p-4 pb-2">
                 <CardTitle className="text-base">Testar Regras</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Simule o perfil de um usuário e veja qual regra seria aplicada. Use os perfis
-                  prontos ou preencha manualmente.
+                  Simule o perfil de um usuário e veja o resultado retornado pelo backend.
                 </p>
               </CardHeader>
               <CardContent className="space-y-6 p-4 pt-2">
@@ -554,42 +625,36 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
                     Ou preencha manualmente
                   </h4>
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                    {TESTER_FIELDS.map((field) => (
-                      <label key={field.key} className="block space-y-1.5">
+                    {testerFields.map((field) => (
+                      <label key={field.campo} className="block space-y-1.5">
                         <span className="text-sm font-medium">{field.label}</span>
                         <Input
-                          value={testProfile[field.key] ?? ""}
-                          onChange={(event) => updateTestField(field.key, event.target.value)}
+                          value={testProfile[field.campo] ?? ""}
+                          onChange={(event) => updateTestField(field.campo, event.target.value)}
                         />
                       </label>
                     ))}
                   </div>
                 </div>
 
-                <Button type="button" className="w-full" onClick={() => setTested(true)}>
-                  Testar Classificação
+                <Button type="button" className="w-full" disabled={testing} onClick={() => void testClassification()}>
+                  {testing ? "Testando..." : "Testar Classificação"}
                 </Button>
               </CardContent>
             </Card>
 
-            {tested && (
-              <Card className={matchedRule?.override ? "border-l-4 border-l-destructive" : undefined}>
+            {(testResult || testError) && (
+              <Card>
                 <CardContent className="space-y-1">
-                  {matchedRule ? (
+                  {testResult ? (
                     <>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <CardTitle className="text-base">Resultado: {matchedRule.result}</CardTitle>
-                        {matchedRule.override && <Badge variant="destructive">⚠ OVERRIDE</Badge>}
-                      </div>
+                      <CardTitle className="text-base">Resultado: {nivelLabel(testResult.nivel)}</CardTitle>
                       <p className="text-sm text-muted-foreground">
-                        Regra aplicada: "{matchedRule.name}" (prioridade {matchedRule.priority}) —{" "}
-                        {conditionLabel(matchedRule)}
+                        Classificação calculada por `/admin/classification-rules/test`.
                       </p>
                     </>
                   ) : (
-                    <p className="text-sm text-muted-foreground">
-                      Nenhuma regra cadastrada corresponde a este perfil.
-                    </p>
+                    <p className="text-sm text-destructive">{testError}</p>
                   )}
                 </CardContent>
               </Card>
@@ -601,8 +666,7 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
               <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-base">Campos disponíveis nas regras</CardTitle>
                 <p className="text-sm text-muted-foreground">
-                  Use esses nomes exatos no campo "Campo" ao criar uma regra. Cada campo
-                  corresponde a uma pergunta do quiz.
+                  Os campos abaixo vêm de `admin_quiz_fields`.
                 </p>
               </CardHeader>
               <CardContent className="p-4 pt-0">
@@ -615,7 +679,7 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
                 ) : (
                   <FieldReferenceTable
                     columns={["CAMPO", "PERGUNTA NO QUIZ", "VALORES ACEITOS"]}
-                    rows={FIELD_ROWS}
+                    rows={fieldRows}
                   />
                 )}
               </CardContent>
@@ -624,172 +688,130 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
         </Tabs>
       </div>
 
-      {canEdit && ruleModalOpen && (
+      {ruleModalOpen && (
         <EntityEditModalShell
-          title={editingId ? "Editar Regra" : "Nova Regra"}
+          title={editingId ? "Editar regra" : "Nova regra"}
           onClose={closeRuleModal}
-          className="max-w-2xl"
           footer={
-            <>
-              <Button type="button" variant="outline" onClick={closeRuleModal}>
-                Cancelar
-              </Button>
-              <Button type="submit" form="rule-edit-form">
-                Salvar Regra
-              </Button>
-            </>
+            <Button type="submit" form="rule-edit-form" disabled={saving}>
+              {saving ? "Salvando..." : "Salvar regra"}
+            </Button>
           }
         >
           <form id="rule-edit-form" className="space-y-4" onSubmit={handleSubmitRule}>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium">Nome da regra *</span>
-                <Input
-                  required
-                  placeholder="Ex: Iniciante por experiência"
-                  value={ruleForm.name}
-                  onChange={(event) =>
-                    setRuleForm((current) => ({ ...current, name: event.target.value }))
-                  }
-                />
-              </label>
-              <label className="block space-y-1.5">
-                <span className="text-sm font-medium">Prioridade (menor = mais importante)</span>
-                <Input
-                  type="number"
-                  value={ruleForm.priority}
-                  onChange={(event) =>
-                    setRuleForm((current) => ({ ...current, priority: event.target.value }))
-                  }
-                />
-              </label>
+            <Input
+              placeholder="Nome da regra"
+              value={ruleForm.name}
+              onChange={(event) => setRuleForm((current) => ({ ...current, name: event.target.value }))}
+            />
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <Input
+                placeholder="Prioridade"
+                type="number"
+                value={ruleForm.priority}
+                onChange={(event) =>
+                  setRuleForm((current) => ({ ...current, priority: event.target.value }))
+                }
+              />
+              <Select
+                value={ruleForm.result}
+                onValueChange={(value) =>
+                  setRuleForm((current) => ({ ...current, result: value as NivelResultado }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Resultado" />
+                </SelectTrigger>
+                <SelectContent>
+                  {LEVEL_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select
+                value={ruleForm.override ? "true" : "false"}
+                onValueChange={(value) =>
+                  setRuleForm((current) => ({ ...current, override: value === "true" }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="false">Regra padrão</SelectItem>
+                  <SelectItem value="true">Override</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
-            <div className="space-y-3 rounded-lg border border-border p-3">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Se (condição)
-              </h4>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <h4 className="text-sm font-semibold">Condições</h4>
+                <Button type="button" variant="outline" size="sm" onClick={addConditionRow}>
+                  Adicionar condição
+                </Button>
+              </div>
               {ruleForm.conditions.map((condition, index) => (
-                <div key={index} className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr_1fr_auto]">
-                  <label className="block space-y-1.5">
-                    <span className="text-sm font-medium">Campo</span>
-                    <Select
-                      value={condition.field}
-                      onValueChange={(value) => updateConditionField(index, { field: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {FIELD_OPTIONS.map((option) => (
-                          <SelectItem key={option} value={option}>
-                            {option}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className="text-sm font-medium">Operador</span>
-                    <Select
-                      value={condition.operator}
-                      onValueChange={(value) => updateConditionField(index, { operator: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {OPERATOR_OPTIONS.map((option) => (
-                          <SelectItem key={option.value} value={option.value}>
-                            {option.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </label>
-                  <label className="block space-y-1.5">
-                    <span className="text-sm font-medium">Valor</span>
-                    <Input
-                      placeholder="Ex: iniciante, 55, sim"
-                      value={condition.value}
-                      onChange={(event) => updateConditionField(index, { value: event.target.value })}
-                    />
-                  </label>
-                  {ruleForm.conditions.length > 1 && (
-                    <Button
-                      type="button"
-                      size="icon-sm"
-                      variant="ghost"
-                      className="self-end"
-                      onClick={() => removeConditionRow(index)}
-                      aria-label="Remover condição"
-                    >
-                      <Trash2 />
-                    </Button>
-                  )}
-                </div>
-              ))}
-              <Button type="button" variant="link" size="sm" className="h-auto p-0" onClick={addConditionRow}>
-                + Adicionar condição AND
-              </Button>
-            </div>
-
-            <div className="space-y-3 rounded-lg border border-border p-3">
-              <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Então (resultado)
-              </h4>
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <label className="block space-y-1.5">
-                  <span className="text-sm font-medium">Nível atribuído *</span>
+                <div key={index} className="grid grid-cols-1 gap-2 rounded-md border border-border p-3 md:grid-cols-[1fr_1fr_1fr_auto]">
                   <Select
-                    value={ruleForm.result}
-                    onValueChange={(value) => setRuleForm((current) => ({ ...current, result: value }))}
+                    value={condition.field}
+                    onValueChange={(value) => updateConditionField(index, { field: value })}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Campo" />
                     </SelectTrigger>
                     <SelectContent>
-                      {LEVEL_OPTIONS.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
+                      {fields.map((field) => (
+                        <SelectItem key={field.campo} value={field.campo}>
+                          {field.campo}
                         </SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
-                </label>
-                <label className="block space-y-1.5">
-                  <span className="text-sm font-medium">Protocolo/Programa (opcional)</span>
+                  <Select
+                    value={condition.operator}
+                    onValueChange={(value) => updateConditionField(index, { operator: value as RuleOperator })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Operador" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OPERATOR_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <Input
-                    placeholder="Nome ou ID do programa"
-                    value={ruleForm.program}
-                    onChange={(event) =>
-                      setRuleForm((current) => ({ ...current, program: event.target.value }))
-                    }
+                    placeholder="Valor"
+                    value={condition.value}
+                    onChange={(event) => updateConditionField(index, { value: event.target.value })}
                   />
-                </label>
-              </div>
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  checked={ruleForm.override}
-                  onChange={(event) =>
-                    setRuleForm((current) => ({ ...current, override: event.target.checked }))
-                  }
-                />
-                Forçar resultado (override) — sobrepõe outras regras
-              </label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    disabled={ruleForm.conditions.length === 1}
+                    onClick={() => removeConditionRow(index)}
+                    aria-label="Remover condição"
+                  >
+                    <Trash2 />
+                  </Button>
+                </div>
+              ))}
             </div>
 
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium">Descrição / Observação (opcional)</span>
-              <Textarea
-                placeholder="Ex: Força iniciante para maiores de 55 anos"
-                value={ruleForm.description}
-                onChange={(event) =>
-                  setRuleForm((current) => ({ ...current, description: event.target.value }))
-                }
-              />
-            </label>
+            <Textarea
+              placeholder="Descrição"
+              value={ruleForm.description}
+              onChange={(event) =>
+                setRuleForm((current) => ({ ...current, description: event.target.value }))
+              }
+            />
           </form>
         </EntityEditModalShell>
       )}
@@ -797,15 +819,20 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
       {deletingRule && (
         <EntityEditModalShell
           title="Excluir regra"
-          description={`Tem certeza que deseja excluir "${deletingRule.name}"? Essa ação não pode ser desfeita.`}
+          description={`Tem certeza que deseja excluir "${deletingRule.name}"? A regra será inativada no backend.`}
           onClose={() => setDeletingRule(null)}
           footer={
             <>
               <Button type="button" variant="outline" onClick={() => setDeletingRule(null)}>
                 Cancelar
               </Button>
-              <Button type="button" variant="destructive" onClick={handleConfirmDelete}>
-                Excluir definitivamente
+              <Button
+                type="button"
+                variant="destructive"
+                disabled={deleteLoading}
+                onClick={handleConfirmDelete}
+              >
+                {deleteLoading ? "Excluindo..." : "Excluir regra"}
               </Button>
             </>
           }
