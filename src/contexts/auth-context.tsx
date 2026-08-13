@@ -8,6 +8,9 @@ import {
 } from "react"
 import type { Session, User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
+import { supabaseCrm } from "@/lib/supabase-crm"
+
+type SessionSource = "traffic" | "crm"
 
 interface AuthContextValue {
   session: Session | null
@@ -20,6 +23,10 @@ interface AuthContextValue {
    * the user isn't restricted. Generalizes the tiktok-only isolation from Story 1.4 to any
    * source. Real enforcement lives server-side in the RPCs — this only drives the UI. */
   restrictedTrafficSourceId: string | null
+  /** True when the active session is a CRM account (`dashboard_role === "crm"`, Story 15.1
+   * Decision 2), authenticated directly against the app's Supabase (`supabaseCrm`). Drives the
+   * sidebar role gate (Story 15.3) — never derived via regex, "crm" has no `_only` suffix. */
+  isCrmRole: boolean
   signOut: () => Promise<void>
 }
 
@@ -36,38 +43,70 @@ const allowedEmails = (
 const AuthContext = createContext<AuthContextValue | null>(null)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [session, setSession] = useState<Session | null>(null)
-  const [loading, setLoading] = useState(true)
+  const [trafficSession, setTrafficSession] = useState<Session | null>(null)
+  const [crmSession, setCrmSession] = useState<Session | null>(null)
+  const [trafficLoaded, setTrafficLoaded] = useState(false)
+  const [crmLoaded, setCrmLoaded] = useState(false)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session)
-      setLoading(false)
+      setTrafficSession(data.session)
+      setTrafficLoaded(true)
     })
 
     const { data } = supabase.auth.onAuthStateChange((_event, nextSession) => {
-      setSession(nextSession)
-      setLoading(false)
+      setTrafficSession(nextSession)
+      setTrafficLoaded(true)
     })
 
     return () => data.subscription.unsubscribe()
   }, [])
 
+  useEffect(() => {
+    supabaseCrm.auth.getSession().then(({ data }) => {
+      setCrmSession(data.session)
+      setCrmLoaded(true)
+    })
+
+    const { data } = supabaseCrm.auth.onAuthStateChange((_event, nextSession) => {
+      setCrmSession(nextSession)
+      setCrmLoaded(true)
+    })
+
+    return () => data.subscription.unsubscribe()
+  }, [])
+
+  const loading = !trafficLoaded || !crmLoaded
+
   const value = useMemo<AuthContextValue>(() => {
+    // Traffic wins on the (should-never-happen) case both clients have an active session at
+    // once — Story 15.1 Decision 4 guarantees the two never coexist for the same user.
+    const session = trafficSession ?? crmSession
+    const source: SessionSource = trafficSession ? "traffic" : "crm"
     const user = session?.user ?? null
     const email = user?.email?.toLowerCase() ?? null
     const dashboardRole = (user?.app_metadata?.dashboard_role as string | undefined) ?? null
+    const isCrmRole = dashboardRole === "crm"
+
+    const isAllowedTeamUser =
+      source === "traffic"
+        ? Boolean(email && allowedEmails.includes(email))
+        : isCrmRole
 
     return {
       session,
       user,
       loading,
-      isAllowedTeamUser: Boolean(email && allowedEmails.includes(email)),
+      isAllowedTeamUser,
       dashboardRole,
       restrictedTrafficSourceId: deriveRestrictedTrafficSourceId(dashboardRole),
-      signOut: () => supabase.auth.signOut().then(() => undefined),
+      isCrmRole,
+      signOut: () =>
+        (source === "crm" ? supabaseCrm.auth.signOut() : supabase.auth.signOut()).then(
+          () => undefined
+        ),
     }
-  }, [loading, session])
+  }, [loading, trafficSession, crmSession])
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }

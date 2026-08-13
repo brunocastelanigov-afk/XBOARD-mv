@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/atoms/car
 import { Input } from "@/components/atoms/input"
 import { useAuth } from "@/contexts/auth-context"
 import { supabase } from "@/lib/supabase"
+import { supabaseCrm } from "@/lib/supabase-crm"
 
 export function LoginPage() {
   const { session, isAllowedTeamUser, loading: authLoading } = useAuth()
@@ -30,18 +31,21 @@ export function LoginPage() {
     setLoading(true)
     setError(null)
 
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email: email.trim().toLowerCase(),
-      password,
-    })
+    const credentials = { email: email.trim().toLowerCase(), password }
 
-    setLoading(false)
+    const { error: trafficError } = await supabase.auth.signInWithPassword(credentials)
 
-    if (authError) {
-      setError("Email ou senha inválidos.")
-      return
+    if (trafficError) {
+      const { error: crmError } = await supabaseCrm.auth.signInWithPassword(credentials)
+
+      if (crmError) {
+        setLoading(false)
+        setError("Email ou senha inválidos.")
+        return
+      }
     }
 
+    setLoading(false)
     navigate(from, { replace: true })
   }
 

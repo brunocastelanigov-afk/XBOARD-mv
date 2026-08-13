@@ -1,6 +1,6 @@
 import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, Trophy, ImageIcon, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, PieChart, Users, LayoutDashboard, GraduationCap } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router-dom"
-import { supabase } from "@/lib/supabase"
+import { useAuth } from "@/contexts/auth-context"
 
 import {
   Sidebar,
@@ -15,99 +15,121 @@ import {
   SidebarFooter,
 } from "@/components/atoms/sidebar"
 
-// Menu items
+// Menu items — `group` drives the role gate (Story 15.3): items without a group (e.g.
+// Relatórios) never render for either role until Story 15.8 decides their fate.
 const items = [
   {
     title: "ROI de Campanhas",
     url: "/roi-campanhas",
     icon: DollarSign,
+    group: "traffic" as const,
   },
   {
     title: "Respostas",
     url: "/respostas",
     icon: MessageSquare,
+    group: "traffic" as const,
   },
   {
     title: "Resultados",
     url: "/resultados",
     icon: BarChart2,
+    group: "traffic" as const,
   },
   {
     title: "Performance Geral",
     url: "/performance",
     icon: Activity,
+    group: "traffic" as const,
   },
   {
     title: "Auditoria de Leads",
     url: "/auditoria",
     icon: ShieldCheck,
+    group: "traffic" as const,
   },
   {
     title: "Dashboard",
     url: "/crm/dashboard",
     icon: LayoutDashboard,
+    group: "crm" as const,
   },
   {
     title: "Usuários",
     url: "/crm/usuarios",
     icon: Users,
+    group: "crm" as const,
   },
   {
     title: "Protocolos",
     url: "/crm/protocolos",
     icon: ClipboardList,
+    group: "crm" as const,
   },
   {
     title: "Exercícios",
     url: "/crm/exercicios",
     icon: Dumbbell,
+    group: "crm" as const,
   },
   {
     title: "Avaliação",
     url: "/crm/avaliacao",
     icon: GraduationCap,
+    group: "crm" as const,
   },
   {
     title: "Conquistas",
     url: "/crm/conquistas",
     icon: Trophy,
+    group: "crm" as const,
   },
   {
     title: "Banners",
     url: "/crm/banners",
     icon: ImageIcon,
+    group: "crm" as const,
   },
   {
     title: "Regras",
     url: "/crm/regras",
     icon: ListChecks,
+    group: "crm" as const,
   },
   {
     title: "Liberar usuário",
     url: "/crm/liberar-usuario",
     icon: UserPlus,
+    group: "crm" as const,
   },
   {
     title: "Configurações",
     url: "/crm/configuracoes",
     icon: Settings,
+    group: "crm" as const,
   },
   {
     title: "Relatórios",
     url: "/crm/relatorios",
     icon: PieChart,
+    group: null,
   },
 ]
 
 export function AppSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
+  const { isCrmRole, signOut } = useAuth()
+
+  const visibleItems = items.filter((item) =>
+    isCrmRole ? item.group === "crm" : item.group === "traffic"
+  )
 
   const handleLogout = async () => {
-    await supabase.auth.signOut()
+    await signOut()
     navigate("/login")
   }
-  
+
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-border py-4 px-2">
@@ -129,7 +151,7 @@ export function AppSidebar() {
           <SidebarGroupLabel>Menu</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => (
+              {visibleItems.map((item) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton 
                     render={<Link to={item.url} />} 
