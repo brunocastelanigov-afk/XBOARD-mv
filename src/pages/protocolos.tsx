@@ -344,6 +344,14 @@ function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : "Nao foi possivel concluir a operacao."
 }
 
+// Add/remove sempre renumeram ordem 1..N sequencial pela posição no
+// array — nunca reaproveitam o ordem antigo dos itens restantes. Sem isso,
+// remover o item 1 deixa o resto começando em 2, e adicionar depois de
+// remoções no meio da lista pode duplicar ou pular números.
+function renumbered<T extends { ordem: number }>(items: T[]): T[] {
+  return items.map((item, index) => (item.ordem === index + 1 ? item : { ...item, ordem: index + 1 }))
+}
+
 function programStatus(row: UserProgramRow) {
   if (!row.has_program) return "sem_protocolo"
   if (row.program_status_geracao === "pending" || row.program_status_geracao === "pendente") return "pendente"
@@ -634,7 +642,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
       current
         ? {
             ...current,
-            dias: [
+            dias: renumbered([
               ...current.dias,
               {
                 ordem: current.dias.length + 1,
@@ -643,7 +651,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                 duracaoMinutos: null,
                 exercicios: [],
               },
-            ],
+            ]),
           }
         : current
     )
@@ -662,7 +670,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
               currentDayIndex === dayIndex
                 ? {
                     ...day,
-                    exercicios: [
+                    exercicios: renumbered([
                       ...day.exercicios,
                       {
                         ordem: day.exercicios.length + 1,
@@ -672,7 +680,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                         repsOuDuracao: "12",
                         descansoSegundos: 60,
                       },
-                    ],
+                    ]),
                   }
                 : day
             ),
@@ -684,7 +692,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   function removeProtocolDay(dayIndex: number) {
     setProtocolFormState((current) =>
       current
-        ? { ...current, dias: current.dias.filter((_, index) => index !== dayIndex) }
+        ? { ...current, dias: renumbered(current.dias.filter((_, index) => index !== dayIndex)) }
         : current
     )
   }
@@ -696,7 +704,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
             ...current,
             dias: current.dias.map((day, currentDayIndex) =>
               currentDayIndex === dayIndex
-                ? { ...day, exercicios: day.exercicios.filter((_, index) => index !== exerciseIndex) }
+                ? { ...day, exercicios: renumbered(day.exercicios.filter((_, index) => index !== exerciseIndex)) }
                 : day
             ),
           }
@@ -749,7 +757,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
               currentDayIndex === dayIndex
                 ? {
                     ...day,
-                    exercicios: [
+                    exercicios: renumbered([
                       ...day.exercicios,
                       {
                         ordem: day.exercicios.length + 1,
@@ -762,7 +770,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                         instrucaoTextoOverride: "",
                         observacoes: "",
                       },
-                    ],
+                    ]),
                   }
                 : day
             ),
@@ -778,7 +786,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
             ...current,
             days: current.days.map((day, currentDayIndex) =>
               currentDayIndex === dayIndex
-                ? { ...day, exercicios: day.exercicios.filter((_, index) => index !== exerciseIndex) }
+                ? { ...day, exercicios: renumbered(day.exercicios.filter((_, index) => index !== exerciseIndex)) }
                 : day
             ),
           }
