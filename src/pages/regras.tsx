@@ -77,6 +77,7 @@ interface QuizFieldRow {
   label: string
   tipo: string
   valores_permitidos: string[] | null
+  pergunta: string
 }
 
 interface TestResponse {
@@ -275,7 +276,7 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
     try {
       const [ruleRows, fieldRows] = await Promise.all([
         adminRpc<AdminRuleRow[]>("admin_classification_rules_list"),
-        adminSelect<QuizFieldRow[]>("admin_quiz_fields", "campo,label,tipo,valores_permitidos"),
+        adminSelect<QuizFieldRow[]>("admin_quiz_fields", "campo,label,tipo,valores_permitidos,pergunta"),
       ])
       setRules(ruleRows.map(rowToRule))
       setFields(fieldRows)
@@ -466,9 +467,15 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
     setTestResult(null)
     setTestError(null)
     try {
+      // O backend casa resposta.pergunta por texto EXATO com a pergunta
+      // real do quiz (QUIZ_FIELD_DEFINITIONS.pergunta em
+      // classification-rules.ts) — nunca com o `campo` curto usado nas
+      // condições de regra. Sem esse mapeamento, toda chamada de teste
+      // retorna 422 "nenhuma regra bateu" mesmo com regras corretas.
+      const perguntaByCampo = new Map(fields.map((field) => [field.campo, field.pergunta]))
       const respostas = Object.entries(testProfile)
         .filter(([, resposta]) => resposta.trim() !== "")
-        .map(([pergunta, resposta]) => ({ pergunta, resposta }))
+        .map(([campo, resposta]) => ({ pergunta: perguntaByCampo.get(campo) ?? campo, resposta }))
       const result = await adminMutation<TestResponse>("/admin/classification-rules/test", {
         method: "POST",
         body: { respostas },
