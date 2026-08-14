@@ -83,6 +83,8 @@ interface TemplateRow {
   categoria: string | null
   etiqueta: string | null
   duracao_minutos: number | null
+  frequencia_semanal: number | null
+  imagem_capa_url: string | null
   status: string
   versao: number
   released_at: string | null
@@ -157,6 +159,8 @@ interface ProtocolForm {
   nivel: NivelApi
   objetivo: ObjetivoApi
   duracaoMinutos: number | null
+  frequenciaSemanal: number | null
+  imagemCapaUrl: string
   dias: {
     ordem: number
     nome: string
@@ -238,6 +242,8 @@ function toProtocolForm(template: TemplateRow | null, defaultCategoria: string):
       nivel: "iniciante",
       objetivo: "ganhar_musculo",
       duracaoMinutos: null,
+      frequenciaSemanal: null,
+      imagemCapaUrl: "",
       dias: [],
     }
   }
@@ -251,6 +257,8 @@ function toProtocolForm(template: TemplateRow | null, defaultCategoria: string):
     nivel: template.nivel,
     objetivo: template.objetivo,
     duracaoMinutos: template.duracao_minutos,
+    frequenciaSemanal: template.frequencia_semanal,
+    imagemCapaUrl: template.imagem_capa_url ?? "",
     dias: template.days.map((day) => ({
       ordem: day.ordem,
       nome: day.nome,
@@ -268,15 +276,21 @@ function toProtocolForm(template: TemplateRow | null, defaultCategoria: string):
   }
 }
 
-function protocolPayload(form: ProtocolForm) {
+function protocolPayload(form: ProtocolForm, mode: "create" | "edit") {
   return {
     nome: form.nome,
     categoria: form.categoria || null,
     etiqueta: form.etiqueta || null,
     descricao: form.descricao || null,
-    nivel: form.nivel,
-    objetivo: form.objetivo,
+    // nivel/objetivo só entram na criação — o backend rejeita PATCH com
+    // esses campos de propósito (cada template ativo é único por
+    // nivel×objetivo, e o pipeline de classificação do quiz busca o
+    // template por essa combinação; deixar editar quebraria esse mapeamento
+    // sem aviso). Duplique o protocolo pra mudar nível/objetivo.
+    ...(mode === "create" ? { nivel: form.nivel, objetivo: form.objetivo } : {}),
     duracaoMinutos: form.duracaoMinutos,
+    frequenciaSemanal: form.frequenciaSemanal,
+    imagemCapaUrl: form.imagemCapaUrl.trim() || null,
     dias: form.dias.map((day) => ({
       ordem: day.ordem,
       nome: day.nome,
@@ -774,12 +788,12 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
       if (protocolFormState.id) {
         await adminMutation(`/admin/protocol-templates/${protocolFormState.id}`, {
           method: "PATCH",
-          body: protocolPayload(protocolFormState),
+          body: protocolPayload(protocolFormState, "edit"),
         })
       } else {
         await adminMutation("/admin/protocol-templates", {
           method: "POST",
-          body: protocolPayload(protocolFormState),
+          body: protocolPayload(protocolFormState, "create"),
         })
       }
       await loadTemplates()
@@ -1066,20 +1080,52 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
 
             {modalStep === "1. Dados do protocolo" && (
               <div className="space-y-4">
-                <Input
-                  placeholder="Nome"
-                  value={protocolFormState.nome}
-                  onChange={(event) => updateProtocolForm({ nome: event.target.value })}
-                />
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="space-y-0.5">
+                  <p className="text-sm font-semibold">Informações do protocolo</p>
+                  <p className="text-sm text-muted-foreground">
+                    Preencha somente o essencial para o aluno reconhecer o treino no app.
+                  </p>
+                </div>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">
+                    Nome do protocolo <span className="text-destructive">*</span>
+                  </span>
                   <Input
-                    placeholder="Categoria"
+                    value={protocolFormState.nome}
+                    onChange={(event) => updateProtocolForm({ nome: event.target.value })}
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">
+                    Categoria do protocolo <span className="text-destructive">*</span>
+                  </span>
+                  <Input
                     value={protocolFormState.categoria}
                     onChange={(event) => updateProtocolForm({ categoria: event.target.value.toUpperCase() })}
                   />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">
+                    Etiqueta interna (só admin vê)
+                  </span>
+                  <Input
+                    value={protocolFormState.etiqueta}
+                    onChange={(event) => updateProtocolForm({ etiqueta: event.target.value })}
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">Descrição curta</span>
+                  <Textarea
+                    value={protocolFormState.descricao}
+                    onChange={(event) => updateProtocolForm({ descricao: event.target.value })}
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">Nível</span>
                   <Select
                     value={protocolFormState.nivel}
                     onValueChange={(value) => updateProtocolForm({ nivel: value as NivelApi })}
+                    disabled={Boolean(protocolFormState.id)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Nível" />
@@ -1092,9 +1138,13 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                       ))}
                     </SelectContent>
                   </Select>
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">Objetivo</span>
                   <Select
                     value={protocolFormState.objetivo}
                     onValueChange={(value) => updateProtocolForm({ objetivo: value as ObjetivoApi })}
+                    disabled={Boolean(protocolFormState.id)}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Objetivo" />
@@ -1107,22 +1157,45 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                       ))}
                     </SelectContent>
                   </Select>
-                </div>
-                <Input
-                  placeholder="Etiqueta"
-                  value={protocolFormState.etiqueta}
-                  onChange={(event) => updateProtocolForm({ etiqueta: event.target.value })}
-                />
-                <Textarea
-                  placeholder="Descrição"
-                  value={protocolFormState.descricao}
-                  onChange={(event) => updateProtocolForm({ descricao: event.target.value })}
-                />
-                <StepperInput
-                  value={protocolFormState.duracaoMinutos ?? 0}
-                  min={0}
-                  onChange={(value) => updateProtocolForm({ duracaoMinutos: value || null })}
-                />
+                </label>
+                {protocolFormState.id && (
+                  <p className="text-xs text-muted-foreground">
+                    Nível e objetivo não podem ser alterados depois de criado — duplique o protocolo pra mudar.
+                  </p>
+                )}
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">Duração (min)</span>
+                  <StepperInput
+                    value={protocolFormState.duracaoMinutos ?? 0}
+                    min={0}
+                    onChange={(value) => updateProtocolForm({ duracaoMinutos: value || null })}
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">Frequência semanal</span>
+                  <StepperInput
+                    value={protocolFormState.frequenciaSemanal ?? 0}
+                    min={0}
+                    max={7}
+                    onChange={(value) => updateProtocolForm({ frequenciaSemanal: value || null })}
+                  />
+                </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">Imagem de capa</span>
+                  <Input
+                    value={protocolFormState.imagemCapaUrl}
+                    onChange={(event) => updateProtocolForm({ imagemCapaUrl: event.target.value })}
+                    placeholder="https://..."
+                  />
+                  {protocolFormState.imagemCapaUrl.trim() && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={protocolFormState.imagemCapaUrl}
+                      alt=""
+                      className="h-24 w-full rounded-md border border-border object-cover"
+                    />
+                  )}
+                </label>
               </div>
             )}
 
