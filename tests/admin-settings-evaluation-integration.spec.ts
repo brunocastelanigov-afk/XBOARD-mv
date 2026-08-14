@@ -230,7 +230,7 @@ test.describe("Story 15.7 — Configuracoes e Avaliacao reais", () => {
     await page.locator('input[value="Produto Trinca"]').fill("Produto Trinca QA")
     await page.getByRole("button", { name: "Salvar produto" }).first().click()
 
-    await page.locator('input[value="https://checkout.example.com/upgrade"]').fill("https://checkout.example.com/upgrade-novo")
+    await page.locator('input[value="https://checkout.example.com/trinca"]').fill("https://checkout.example.com/trinca-novo")
     await page.getByRole("button", { name: "Salvar configurações" }).click()
 
     await page.getByRole("spinbutton").last().fill("60")

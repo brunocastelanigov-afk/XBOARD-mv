@@ -63,7 +63,6 @@ interface AdminLastlinkProductMapResponse {
 
 interface ConfiguracoesFormState {
   appName: string
-  upgradeLink: string
   validadeTrincaDias: number
   validadeEliteDias: number
   renewLinkTrinca: string
@@ -73,7 +72,6 @@ interface ConfiguracoesFormState {
 
 const emptyForm: ConfiguracoesFormState = {
   appName: "",
-  upgradeLink: "",
   validadeTrincaDias: 1,
   validadeEliteDias: 1,
   renewLinkTrinca: "",
@@ -89,7 +87,6 @@ const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
 function settingsToForm(settings: AdminAppSettingsRow): ConfiguracoesFormState {
   return {
     appName: settings.app_name,
-    upgradeLink: settings.upgrade_url ?? "",
     validadeTrincaDias: settings.trinca_validity_days,
     validadeEliteDias: settings.elite_validity_days,
     renewLinkTrinca: settings.renewal_trinca_url ?? "",
@@ -187,7 +184,6 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
       const saved = await adminMutation<AdminSettingsMutationResponse>("/admin/settings", {
         method: "PATCH",
         body: {
-          upgradeUrl: nullableUrl(form.upgradeLink),
           renewalTrincaUrl: nullableUrl(form.renewLinkTrinca),
           renewalEliteUrl: nullableUrl(form.renewLinkElite),
           supportUrl: nullableUrl(form.supportLink),
@@ -198,7 +194,6 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
 
       setForm((current) => ({
         ...current,
-        upgradeLink: saved.upgradeUrl ?? "",
         renewLinkTrinca: saved.renewalTrincaUrl ?? "",
         renewLinkElite: saved.renewalEliteUrl ?? "",
         supportLink: saved.supportUrl ?? "",
@@ -341,15 +336,6 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
                   <ProductGroup title="Produtos Treino Trinca" products={groupedProducts.trinca} />
                   <ProductGroup title="Produtos Trinca Elite" products={groupedProducts.elite} />
                 </div>
-                <label className="block space-y-2">
-                  <span className="text-sm font-medium">Link de upgrade para o Elite</span>
-                  <Input
-                    value={form.upgradeLink}
-                    disabled={!canEdit}
-                    onChange={(event) => updateField("upgradeLink", event.target.value)}
-                  />
-                  <p className="text-xs text-muted-foreground">Usado no botão "Conhecer o Elite" dentro do app.</p>
-                </label>
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <label className="block space-y-2">
                     <span className="text-sm font-medium">Validade Trinca (dias)</span>
@@ -386,6 +372,13 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
                     onChange={(event) => updateField("renewLinkElite", event.target.value)}
                   />
                 </label>
+                <div className="flex gap-3 rounded-lg border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-foreground" />
+                  <p>
+                    Estes valores salvam no admin, mas o app ainda não consome os links de renovação em nenhuma
+                    tela.
+                  </p>
+                </div>
               </>
             )}
           </CardContent>
