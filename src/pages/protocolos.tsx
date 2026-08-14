@@ -376,6 +376,24 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   const [appliedEmailQuery, setAppliedEmailQuery] = useState("")
   const [planoFilter, setPlanoFilter] = useState(PLANO_FILTER_ALL)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [confirmRemoval, setConfirmRemoval] = useState<
+    | { kind: "protocol-day"; dayIndex: number; label: string; description: string }
+    | { kind: "protocol-exercise"; dayIndex: number; exerciseIndex: number; label: string; description: string }
+    | { kind: "program-exercise"; dayIndex: number; exerciseIndex: number; label: string; description: string }
+    | null
+  >(null)
+
+  function confirmRemovalAction() {
+    if (!confirmRemoval) return
+    if (confirmRemoval.kind === "protocol-day") {
+      removeProtocolDay(confirmRemoval.dayIndex)
+    } else if (confirmRemoval.kind === "protocol-exercise") {
+      removeProtocolExercise(confirmRemoval.dayIndex, confirmRemoval.exerciseIndex)
+    } else {
+      removeProgramExercise(confirmRemoval.dayIndex, confirmRemoval.exerciseIndex)
+    }
+    setConfirmRemoval(null)
+  }
   const [exerciseCatalogFull, setExerciseCatalogFull] = useState<AdminExerciseCatalogRow[]>([])
   const [expandedProgramExerciseKey, setExpandedProgramExerciseKey] = useState<string | null>(null)
   const [expandedProtocolDayIndex, setExpandedProtocolDayIndex] = useState<number | null>(null)
@@ -1236,13 +1254,12 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                       ]}
                       onRemove={() => {
                         const label = day.nome || `Treino ${dayIndex + 1}`
-                        if (
-                          window.confirm(
-                            `Remover "${label}" e seus ${day.exercicios.length} exercício(s) deste protocolo? Isso não afeta o catálogo de exercícios, só a lista deste protocolo.`
-                          )
-                        ) {
-                          removeProtocolDay(dayIndex)
-                        }
+                        setConfirmRemoval({
+                          kind: "protocol-day",
+                          dayIndex,
+                          label,
+                          description: `Tem certeza que deseja remover "${label}" e seus ${day.exercicios.length} exercício(s) deste protocolo? Isso não afeta o catálogo de exercícios, só a lista deste protocolo.`,
+                        })
                       }}
                       onExpand={() => setExpandedProtocolDayIndex(dayExpanded ? null : dayIndex)}
                     />
@@ -1325,13 +1342,13 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                         ]}
                                         draggable
                                         onRemove={() => {
-                                          if (
-                                            window.confirm(
-                                              `Remover "${exercise.nome}" deste treino? O exercício continua cadastrado no catálogo — isso só tira ele desta lista.`
-                                            )
-                                          ) {
-                                            removeProtocolExercise(dayIndex, exerciseIndex)
-                                          }
+                                          setConfirmRemoval({
+                                            kind: "protocol-exercise",
+                                            dayIndex,
+                                            exerciseIndex,
+                                            label: exercise.nome,
+                                            description: `Tem certeza que deseja remover "${exercise.nome}" deste treino? O exercício continua cadastrado no catálogo — isso só tira ele desta lista.`,
+                                          })
                                         }}
                                         onExpand={() => {
                                           setExpandedProgramExerciseKey(exerciseExpanded ? null : exerciseKey)
@@ -1555,13 +1572,13 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                           ]}
                                           draggable
                                           onRemove={() => {
-                                            if (
-                                              window.confirm(
-                                                `Remover "${exercise.nome}" deste treino? O exercício continua cadastrado no catálogo — isso só tira ele desta lista, e só para este aluno.`
-                                              )
-                                            ) {
-                                              removeProgramExercise(dayIndex, exerciseIndex)
-                                            }
+                                            setConfirmRemoval({
+                                              kind: "program-exercise",
+                                              dayIndex,
+                                              exerciseIndex,
+                                              label: exercise.nome,
+                                              description: `Tem certeza que deseja remover "${exercise.nome}" deste treino? O exercício continua cadastrado no catálogo — isso só tira ele desta lista, e só para este aluno.`,
+                                            })
                                           }}
                                           onExpand={() => {
                                             setExpandedProgramExerciseKey(exerciseExpanded ? null : exerciseKey)
@@ -1721,6 +1738,24 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                 onClick={handleConfirmDelete}
               >
                 {deleteLoading ? "Excluindo..." : "Excluir protocolo"}
+              </Button>
+            </>
+          }
+        />
+      )}
+
+      {confirmRemoval && (
+        <EntityEditModalShell
+          title={confirmRemoval.kind === "protocol-day" ? "Remover treino" : "Remover exercício"}
+          description={confirmRemoval.description}
+          onClose={() => setConfirmRemoval(null)}
+          footer={
+            <>
+              <Button type="button" variant="outline" onClick={() => setConfirmRemoval(null)}>
+                Cancelar
+              </Button>
+              <Button type="button" variant="destructive" onClick={confirmRemovalAction}>
+                Remover
               </Button>
             </>
           }
