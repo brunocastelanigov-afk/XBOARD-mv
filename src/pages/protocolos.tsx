@@ -525,23 +525,39 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
       setProgramFormState({
         userId: student.user_id,
         email: student.email,
-        days: detail.days.map((day) => ({
-          workoutDayId: day.workout_day_id,
-          nome: day.nome,
-          foco: day.foco ?? "",
-          imagemUrl: day.imagem_url ?? "",
-          exercicios: (day.exercicios_snapshot ?? day.exercicios ?? []).map((exercise, index) => ({
-            ordem: exercise.ordem ?? index + 1,
-            exerciseId: exercise.exercise_id,
-            nome: exercise.nome,
-            series: exercise.series ?? null,
-            repsOuDuracao: exercise.reps_ou_duracao ?? exercise.reps ?? "",
-            descansoSegundos: exercise.descanso_segundos ?? 0,
-            videoUrlOverride: exercise.video_url_override ?? "",
-            instrucaoTextoOverride: exercise.instrucao_texto_override ?? "",
-            observacoes: exercise.observacoes ?? "",
-          })),
-        })),
+        days: detail.days.map((day) => {
+          // exercicios_snapshot (cache denormalizado) tem nome/series/reps/
+          // descanso mas NUNCA teve exercise_id — só o array `exercicios`
+          // (join real com workout_day_exercises) tem o id de verdade e os
+          // overrides de video/instrucao/observacoes. Sem esse merge por
+          // ordem, exerciseId fica undefined: os campos de override nunca
+          // batem com o catálogo (sempre em branco) e o payload de salvar
+          // perde exerciseId no JSON.stringify, rejeitado pelo backend.
+          const joinedByOrdem = new Map(
+            (day.exercicios ?? []).map((joined, index) => [joined.ordem ?? index + 1, joined])
+          )
+          return {
+            workoutDayId: day.workout_day_id,
+            nome: day.nome,
+            foco: day.foco ?? "",
+            imagemUrl: day.imagem_url ?? "",
+            exercicios: (day.exercicios_snapshot ?? day.exercicios ?? []).map((exercise, index) => {
+              const ordem = exercise.ordem ?? index + 1
+              const joined = joinedByOrdem.get(ordem)
+              return {
+                ordem,
+                exerciseId: joined?.exercise_id ?? exercise.exercise_id ?? "",
+                nome: exercise.nome,
+                series: exercise.series ?? null,
+                repsOuDuracao: exercise.reps_ou_duracao ?? exercise.reps ?? "",
+                descansoSegundos: exercise.descanso_segundos ?? 0,
+                videoUrlOverride: joined?.video_url_override ?? exercise.video_url_override ?? "",
+                instrucaoTextoOverride: joined?.instrucao_texto_override ?? exercise.instrucao_texto_override ?? "",
+                observacoes: joined?.observacoes ?? exercise.observacoes ?? "",
+              }
+            }),
+          }
+        }),
       })
     } catch (detailError) {
       setModalError(errorMessage(detailError))
