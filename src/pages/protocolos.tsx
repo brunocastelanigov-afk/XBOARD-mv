@@ -1234,7 +1234,16 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                         day.duracaoMinutos ? `${day.duracaoMinutos} min` : "Sem duração",
                         `${day.exercicios.length} exercício(s)`,
                       ]}
-                      onRemove={() => removeProtocolDay(dayIndex)}
+                      onRemove={() => {
+                        const label = day.nome || `Treino ${dayIndex + 1}`
+                        if (
+                          window.confirm(
+                            `Remover "${label}" e seus ${day.exercicios.length} exercício(s) deste protocolo? Isso não afeta o catálogo de exercícios, só a lista deste protocolo.`
+                          )
+                        ) {
+                          removeProtocolDay(dayIndex)
+                        }
+                      }}
                       onExpand={() => setExpandedProtocolDayIndex(dayExpanded ? null : dayIndex)}
                     />
 
@@ -1315,7 +1324,15 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                           `${exercise.descansoSegundos}s descanso`,
                                         ]}
                                         draggable
-                                        onRemove={() => removeProtocolExercise(dayIndex, exerciseIndex)}
+                                        onRemove={() => {
+                                          if (
+                                            window.confirm(
+                                              `Remover "${exercise.nome}" deste treino? O exercício continua cadastrado no catálogo — isso só tira ele desta lista.`
+                                            )
+                                          ) {
+                                            removeProtocolExercise(dayIndex, exerciseIndex)
+                                          }
+                                        }}
                                         onExpand={() => {
                                           setExpandedProgramExerciseKey(exerciseExpanded ? null : exerciseKey)
                                           setExercisePickerQuery("")
@@ -1537,7 +1554,15 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                             `${exercise.descansoSegundos}s descanso`,
                                           ]}
                                           draggable
-                                          onRemove={() => removeProgramExercise(dayIndex, exerciseIndex)}
+                                          onRemove={() => {
+                                            if (
+                                              window.confirm(
+                                                `Remover "${exercise.nome}" deste treino? O exercício continua cadastrado no catálogo — isso só tira ele desta lista, e só para este aluno.`
+                                              )
+                                            ) {
+                                              removeProgramExercise(dayIndex, exerciseIndex)
+                                            }
+                                          }}
                                           onExpand={() => {
                                             setExpandedProgramExerciseKey(exerciseExpanded ? null : exerciseKey)
                                             setExercisePickerQuery("")
