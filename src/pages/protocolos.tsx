@@ -213,11 +213,21 @@ const OBJETIVO_OPTIONS: { value: ObjetivoApi; label: string }[] = [
 const PLANO_FILTER_ALL = "__todos__"
 const ALUNOS_PAGE_SIZE = 20
 
-const ALUNO_STATUS_TONE = {
+type AlunoStatus = "sem_protocolo" | "gerando" | "aguardando_liberacao" | "com_protocolo"
+
+// Mesma janela de carência aplicada no app do aluno (app-treino/src/hooks/
+// use-protocol-status.ts ACTIVATION_DELAY_MS) — o countdown visível pro
+// aluno mostra 24h, mas a liberação real acontece às 12h. O admin precisa
+// usar exatamente esse valor, senão os dois lados discordam sobre quando
+// o protocolo está liberado.
+const ACTIVATION_DELAY_MS = 12 * 60 * 60 * 1000
+
+const ALUNO_STATUS_TONE: Record<AlunoStatus, { icon: typeof CheckCircle2; className: string; label: string }> = {
   com_protocolo: { icon: CheckCircle2, className: "text-green-500", label: "Com protocolo" },
-  pendente: { icon: Clock, className: "text-amber-500", label: "Protocolo pendente" },
+  aguardando_liberacao: { icon: Clock, className: "text-amber-500", label: "Aguardando liberação" },
+  gerando: { icon: Loader2, className: "text-amber-500 animate-spin", label: "Gerando protocolo" },
   sem_protocolo: { icon: Lock, className: "text-blue-500", label: "Sem protocolo" },
-} as const
+}
 
 function nivelLabel(value: string) {
   return NIVEL_OPTIONS.find((option) => option.value === value)?.label ?? value
@@ -352,10 +362,20 @@ function renumbered<T extends { ordem: number }>(items: T[]): T[] {
   return items.map((item, index) => (item.ordem === index + 1 ? item : { ...item, ordem: index + 1 }))
 }
 
-function programStatus(row: UserProgramRow) {
+function programStatus(row: UserProgramRow, nowMs: number): AlunoStatus {
   if (!row.has_program) return "sem_protocolo"
-  if (row.program_status_geracao === "pending" || row.program_status_geracao === "pendente") return "pendente"
+  if (row.program_status_geracao === "preparando") return "gerando"
+  if (row.program_created_at) {
+    const elapsedMs = nowMs - new Date(row.program_created_at).getTime()
+    if (elapsedMs < ACTIVATION_DELAY_MS) return "aguardando_liberacao"
+  }
   return "com_protocolo"
+}
+
+function hoursRemaining(row: UserProgramRow, nowMs: number): number {
+  if (!row.program_created_at) return 0
+  const elapsedMs = nowMs - new Date(row.program_created_at).getTime()
+  return Math.max(0, Math.ceil((ACTIVATION_DELAY_MS - elapsedMs) / (60 * 60 * 1000)))
 }
 
 interface ProtocolosPageProps {
@@ -373,6 +393,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   const [students, setStudents] = useState<UserProgramRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [releasingUserId, setReleasingUserId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [deletingTemplate, setDeletingTemplate] = useState<TemplateRow | null>(null)
   const [modalMode, setModalMode] = useState<"create" | "edit" | "program" | null>(null)
@@ -441,6 +462,20 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setStudents(rows)
   }
 
+  async function handleLiberarProtocolo(aluno: UserProgramRow) {
+    if (releasingUserId) return
+    setReleasingUserId(aluno.user_id)
+    setError(null)
+    try {
+      await adminMutation(`/admin/users/${aluno.user_id}/program/release`, { method: "POST" })
+      await loadStudents()
+    } catch (releaseError) {
+      setError(errorMessage(releaseError))
+    } finally {
+      setReleasingUserId(null)
+    }
+  }
+
   async function loadData() {
     setLoading(true)
     setError(null)
@@ -491,14 +526,20 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
       .filter(([, items]) => items.length > 0)
   }, [categorias, search])
 
+  // Recalcula só quando a lista de alunos muda (nova busca/reload) — não a
+  // cada segundo, é uma lista admin, não uma tela de countdown ao vivo.
+  const nowMs = useMemo(() => Date.now(), [students])
+
   const alunosStats = useMemo(
     () => ({
       noApp: students.length,
-      comProtocolo: students.filter((student) => student.has_program).length,
-      pendente: students.filter((student) => programStatus(student) === "pendente").length,
+      comProtocolo: students.filter((student) => programStatus(student, nowMs) === "com_protocolo").length,
+      aguardandoLiberacao: students.filter((student) => programStatus(student, nowMs) === "aguardando_liberacao")
+        .length,
+      gerando: students.filter((student) => programStatus(student, nowMs) === "gerando").length,
       semProtocolo: students.filter((student) => !student.has_program).length,
     }),
-    [students]
+    [students, nowMs]
   )
 
   const pagedAlunos = forceEmpty ? [] : students
@@ -982,7 +1023,12 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <StatTile icon={Users} label="No app" value={alunosStats.noApp} tone="blue" />
               <StatTile icon={CheckCircle2} label="Com protocolo" value={alunosStats.comProtocolo} tone="green" />
-              <StatTile icon={Clock} label="Pendentes" value={alunosStats.pendente} tone="amber" />
+              <StatTile
+                icon={Clock}
+                label="Aguardando liberação"
+                value={alunosStats.aguardandoLiberacao}
+                tone="amber"
+              />
               <StatTile icon={Lock} label="Sem protocolo" value={alunosStats.semProtocolo} tone="purple" />
             </div>
 
@@ -1031,7 +1077,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
             ) : (
               <div className="space-y-3">
                 {pagedAlunos.map((aluno) => {
-                  const status = programStatus(aluno)
+                  const status = programStatus(aluno, nowMs)
                   const statusTone = ALUNO_STATUS_TONE[status]
                   const StatusIcon = statusTone.icon
                   return (
@@ -1049,16 +1095,29 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                           <p className="text-sm text-muted-foreground">{aluno.email}</p>
                           <p className="text-sm text-muted-foreground">
                             {aluno.program_nome || "Sem programa atual"}
+                            {status === "aguardando_liberacao" && ` · libera em até ${hoursRemaining(aluno, nowMs)}h`}
                           </p>
                         </div>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          disabled={!aluno.has_program}
-                          onClick={() => void openTreinoIndividualModal(aluno)}
-                        >
-                          Editar treino
-                        </Button>
+                        <div className="flex gap-2">
+                          {status === "aguardando_liberacao" && (
+                            <Button
+                              type="button"
+                              variant="default"
+                              disabled={releasingUserId === aluno.user_id}
+                              onClick={() => void handleLiberarProtocolo(aluno)}
+                            >
+                              {releasingUserId === aluno.user_id ? "Liberando..." : "Liberar protocolo"}
+                            </Button>
+                          )}
+                          <Button
+                            type="button"
+                            variant="outline"
+                            disabled={!aluno.has_program}
+                            onClick={() => void openTreinoIndividualModal(aluno)}
+                          >
+                            Editar treino
+                          </Button>
+                        </div>
                       </CardContent>
                     </Card>
                   )
