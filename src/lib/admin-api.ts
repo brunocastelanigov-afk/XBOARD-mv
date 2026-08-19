@@ -1,4 +1,4 @@
-import { supabaseCrm } from "@/lib/supabase-crm"
+import { isStuckSessionError, recoverFromStuckSession, supabaseCrm } from "@/lib/supabase-crm"
 
 const apiUrl = import.meta.env.VITE_API_URL as string | undefined
 
@@ -27,7 +27,10 @@ type RpcResult<T> = {
 
 async function getCrmAccessToken() {
   const { data, error } = await supabaseCrm.auth.getSession()
-  if (error) throw new AdminApiError(error.message, 401, "crm_session_error")
+  if (error) {
+    if (isStuckSessionError(error.message)) recoverFromStuckSession()
+    throw new AdminApiError(error.message, 401, "crm_session_error")
+  }
   const token = data.session?.access_token
   if (!token) throw new AdminApiError("Sessao CRM ausente.", 401, "crm_session_missing")
   return token
@@ -53,12 +56,9 @@ async function parseWorkerError(response: Response): Promise<AdminApiError> {
       error?: { code?: string; message?: string; fieldErrors?: Record<string, string[]> }
       message?: string
     }
-    return new AdminApiError(
-      body.error?.message ?? body.message ?? "Erro na chamada admin.",
-      response.status,
-      body.error?.code,
-      body.error?.fieldErrors
-    )
+    const message = body.error?.message ?? body.message ?? "Erro na chamada admin."
+    if (response.status === 401 && isStuckSessionError(message)) recoverFromStuckSession()
+    return new AdminApiError(message, response.status, body.error?.code, body.error?.fieldErrors)
   } catch {
     return new AdminApiError("Erro na chamada admin.", response.status)
   }
@@ -66,7 +66,11 @@ async function parseWorkerError(response: Response): Promise<AdminApiError> {
 
 export async function adminRpc<T>(name: string, params: Record<string, unknown> = {}): Promise<T> {
   const { data, error } = (await supabaseCrm.rpc(name, params)) as RpcResult<T>
-  if (error) throw new AdminApiError(error.message, 400, "admin_rpc_error")
+  if (error) {
+    const stuck = isStuckSessionError(error.message)
+    if (stuck) recoverFromStuckSession()
+    throw new AdminApiError(error.message, stuck ? 401 : 400, "admin_rpc_error")
+  }
   return data as T
 }
 

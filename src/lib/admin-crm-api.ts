@@ -1,4 +1,4 @@
-import { supabaseCrm } from "@/lib/supabase-crm"
+import { isStuckSessionError, recoverFromStuckSession, supabaseCrm } from "@/lib/supabase-crm"
 
 const apiUrl = import.meta.env.VITE_API_URL as string | undefined
 
@@ -16,7 +16,10 @@ export class AdminApiError extends Error {
 
 async function crmAccessToken() {
   const { data, error } = await supabaseCrm.auth.getSession()
-  if (error) throw new AdminApiError(error.message, 401, "crm_session_error")
+  if (error) {
+    if (isStuckSessionError(error.message)) recoverFromStuckSession()
+    throw new AdminApiError(error.message, 401, "crm_session_error")
+  }
   const token = data.session?.access_token
   if (!token) throw new AdminApiError("Sessao CRM ausente. Faca login novamente.", 401, "missing_crm_session")
   return token
@@ -35,6 +38,7 @@ async function readError(response: Response) {
     const body = (await response.json()) as { message?: unknown; error?: unknown; code?: unknown }
     const message = typeof body.message === "string" ? body.message : typeof body.error === "string" ? body.error : fallback
     const code = typeof body.code === "string" ? body.code : null
+    if (response.status === 401 && isStuckSessionError(message)) recoverFromStuckSession()
     return new AdminApiError(message, response.status, code)
   } catch {
     return new AdminApiError(fallback, response.status)
@@ -73,12 +77,22 @@ function rpcErrorMessage(error: { message?: string; details?: string | null; hin
 
 export async function adminRpc<T>(name: string, args?: Record<string, unknown>) {
   const { data, error } = await supabaseCrm.rpc(name, args)
-  if (error) throw new AdminApiError(rpcErrorMessage(error), 400, error.code ?? "rpc_error")
+  if (error) {
+    const message = rpcErrorMessage(error)
+    const stuck = isStuckSessionError(message)
+    if (stuck) recoverFromStuckSession()
+    throw new AdminApiError(message, stuck ? 401 : 400, error.code ?? "rpc_error")
+  }
   return data as T
 }
 
 export async function adminSelect<T>(table: string, columns = "*") {
   const { data, error } = await supabaseCrm.from(table).select(columns)
-  if (error) throw new AdminApiError(rpcErrorMessage(error), 400, error.code ?? "select_error")
+  if (error) {
+    const message = rpcErrorMessage(error)
+    const stuck = isStuckSessionError(message)
+    if (stuck) recoverFromStuckSession()
+    throw new AdminApiError(message, stuck ? 401 : 400, error.code ?? "select_error")
+  }
   return data as T
 }
