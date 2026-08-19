@@ -34,6 +34,20 @@ mesmo projeto Supabase de campanhas nos dois ambientes — não há split de
 staging/produção para o dashboard de Tráfego, só para o CRM (Story 15.1,
 Decisão 4).
 
+## Contas CRM (login no dashboard)
+
+Autenticação de CRM é feita direto no Supabase Auth do app (`VITE_SUPABASE_CRM_URL`
+acima), via `dashboard_role: "crm"` em `app_metadata` (Story 15.1, Decisão 2).
+Não há tabela de usuários própria do dashboard — criar/editar conta é uma
+operação direta no Supabase Auth do projeto correspondente.
+
+| Ambiente | Projeto Supabase | E-mail |
+|---|---|---|
+| Produção | `shyzagfnifqitpmyurol` | `suportemelhorversao@gmail.com` |
+
+> Senha não documentada aqui por segurança (este arquivo é versionado no
+> git). Guardar/rotacionar a senha real no gerenciador de senhas do time.
+
 ## Como fazer deploy
 
 ```bash

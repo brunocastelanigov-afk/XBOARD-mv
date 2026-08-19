@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { Clock, Crown, Eye, Lock, Undo2, Users, Zap } from "lucide-react"
 
@@ -51,6 +51,8 @@ type AdminUserListRow = {
   created_at: string
   last_seen_at: string | null
   access_status: string | null
+  cursor_created_at: string
+  cursor_user_id: string
 }
 
 type AdminUsersRevenueRankRow = {
@@ -60,6 +62,15 @@ type AdminUsersRevenueRankRow = {
   tier: string
   access_status: string | null
   revenue_net_cents: number
+}
+
+type AdminUserStatsRow = {
+  total: number
+  trinca: number
+  elite: number
+  reembolso: number
+  sem_acesso: number
+  vencendo: number
 }
 
 type AdminUserDetailRow = {
@@ -239,12 +250,24 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
   const canEdit = canEditProp ?? searchParams.get("canEdit") !== "false"
 
   const [loading, setLoading] = useState(true)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [objetivo, setObjetivo] = useState(ALL)
   const [sexo, setSexo] = useState(ALL)
   const [status, setStatus] = useState<LeadStatus | typeof ALL>(ALL)
   const [leads, setLeads] = useState<Lead[]>([])
+  const [stats, setStats] = useState<AdminUserStatsRow>({
+    total: 0,
+    trinca: 0,
+    elite: 0,
+    reembolso: 0,
+    sem_acesso: 0,
+    vencendo: 0,
+  })
+  const [cursor, setCursor] = useState<{ createdAt: string; userId: string } | null>(null)
+  const [hasMore, setHasMore] = useState(false)
+  const rankByUserIdRef = useRef(new Map<string, AdminUsersRevenueRankRow>())
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
   const [selectedUserDetail, setSelectedUserDetail] = useState<UserDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -262,16 +285,24 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
       setError(null)
 
       try {
-        const [users, rank, settings] = await Promise.all([
+        const [users, rank, settings, statsRows] = await Promise.all([
           adminRpc<AdminUserListRow[]>("admin_users_list", { p_limit: 100 }),
           adminRpc<AdminUsersRevenueRankRow[]>("admin_users_revenue_rank", { p_limit: 100 }),
           adminRpc<AdminAppSettingsRow[]>("admin_app_settings_current"),
+          adminRpc<AdminUserStatsRow[]>("admin_users_stats"),
         ])
 
         if (!active) return
 
         const rankByUserId = new Map(rank.map((row) => [row.user_id, row]))
+        rankByUserIdRef.current = rankByUserId
         setLeads(users.map((row) => rowToLead(row, rankByUserId.get(row.user_id))))
+
+        const lastUser = users[users.length - 1]
+        setCursor(lastUser ? { createdAt: lastUser.cursor_created_at, userId: lastUser.cursor_user_id } : null)
+        setHasMore(users.length === 100)
+
+        if (statsRows[0]) setStats(statsRows[0])
 
         const reassessmentDays = settings[0]?.reassessment_days
         if (typeof reassessmentDays === "number") {
@@ -294,6 +325,33 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     }
   }, [])
 
+  async function handleLoadMore() {
+    if (!cursor || loadingMore) return
+    setLoadingMore(true)
+    setError(null)
+
+    try {
+      const users = await adminRpc<AdminUserListRow[]>("admin_users_list", {
+        p_before_created_at: cursor.createdAt,
+        p_before_user_id: cursor.userId,
+        p_limit: 100,
+      })
+
+      setLeads((current) => [
+        ...current,
+        ...users.map((row) => rowToLead(row, rankByUserIdRef.current.get(row.user_id))),
+      ])
+
+      const lastUser = users[users.length - 1]
+      setCursor(lastUser ? { createdAt: lastUser.cursor_created_at, userId: lastUser.cursor_user_id } : null)
+      setHasMore(users.length === 100)
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Erro ao carregar mais usuários.")
+    } finally {
+      setLoadingMore(false)
+    }
+  }
+
   const objetivoOptions = useMemo(
     () => Array.from(new Set(leads.map((lead) => lead.objetivo).filter(Boolean))).sort(),
     [leads]
@@ -302,16 +360,6 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     () => Array.from(new Set(leads.map((lead) => lead.sexo).filter(Boolean))).sort(),
     [leads]
   )
-
-  const stats = useMemo(() => {
-    return {
-      total: leads.length,
-      trinca: leads.filter((lead) => lead.status === "trinca").length,
-      elite: leads.filter((lead) => lead.status === "elite").length,
-      reembolso: leads.filter((lead) => lead.status === "reembolsada").length,
-      semAcesso: leads.filter((lead) => lead.status === "sem_acesso").length,
-    }
-  }, [leads])
 
   const filteredLeads = useMemo(() => {
     const term = search.trim().toLowerCase()
@@ -432,7 +480,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
             <StatTile label="Trinca" value={stats.trinca} icon={Zap} tone="blue" />
             <StatTile label="Elite" value={stats.elite} icon={Crown} tone="purple" />
             <StatTile label="Reembolso" value={stats.reembolso} icon={Undo2} tone="red" />
-            <StatTile label="Sem acesso" value={stats.semAcesso} icon={Lock} tone="amber" />
+            <StatTile label="Sem acesso" value={stats.sem_acesso} icon={Lock} tone="amber" />
           </div>
         )}
 
@@ -494,6 +542,14 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
           <EmptyState icon={Users} message="Nenhum lead encontrado para os filtros aplicados." />
         ) : (
           <DataGrid columns={dataGridColumns} data={dataGridRows} />
+        )}
+
+        {!loading && hasMore && (
+          <div className="flex justify-center">
+            <Button type="button" variant="outline" onClick={handleLoadMore} disabled={loadingMore}>
+              {loadingMore ? "Carregando..." : "Carregar mais"}
+            </Button>
+          </div>
         )}
 
         {loading ? (

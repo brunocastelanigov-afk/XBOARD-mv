@@ -92,6 +92,14 @@ interface TemplateRow {
   days: TemplateDayRow[]
 }
 
+interface AdminUserProgramsStatsRow {
+  no_app: number
+  com_protocolo: number
+  aguardando_liberacao: number
+  gerando: number
+  sem_protocolo: number
+}
+
 interface UserProgramRow {
   user_id: string
   email: string
@@ -391,6 +399,16 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   const [topTab, setTopTab] = useState<TopTab>("protocolos")
   const [templates, setTemplates] = useState<TemplateRow[]>([])
   const [students, setStudents] = useState<UserProgramRow[]>([])
+  const [programsStats, setProgramsStats] = useState<AdminUserProgramsStatsRow>({
+    no_app: 0,
+    com_protocolo: 0,
+    aguardando_liberacao: 0,
+    gerando: 0,
+    sem_protocolo: 0,
+  })
+  const [studentsCursor, setStudentsCursor] = useState<{ createdAt: string; userId: string } | null>(null)
+  const [studentsHasMore, setStudentsHasMore] = useState(false)
+  const [loadingMoreStudents, setLoadingMoreStudents] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [releasingUserId, setReleasingUserId] = useState<string | null>(null)
@@ -452,14 +470,55 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   }
 
   async function loadStudents() {
-    const rows = await adminRpc<UserProgramRow[]>("admin_user_programs_list", {
-      p_search_email_exact: appliedEmailQuery.trim() || null,
-      p_tier: planoFilter === PLANO_FILTER_ALL ? null : planoFilter,
-      p_before_created_at: null,
-      p_before_user_id: null,
-      p_limit: ALUNOS_PAGE_SIZE,
-    })
+    const tier = planoFilter === PLANO_FILTER_ALL ? null : planoFilter
+    const emailExact = appliedEmailQuery.trim() || null
+
+    const [rows, statsRows] = await Promise.all([
+      adminRpc<UserProgramRow[]>("admin_user_programs_list", {
+        p_search_email_exact: emailExact,
+        p_tier: tier,
+        p_before_created_at: null,
+        p_before_user_id: null,
+        p_limit: ALUNOS_PAGE_SIZE,
+      }),
+      adminRpc<AdminUserProgramsStatsRow[]>("admin_user_programs_stats", {
+        p_search_email_exact: emailExact,
+        p_tier: tier,
+      }),
+    ])
+
     setStudents(rows)
+    if (statsRows[0]) setProgramsStats(statsRows[0])
+
+    const lastRow = rows[rows.length - 1]
+    setStudentsCursor(lastRow ? { createdAt: lastRow.cursor_created_at, userId: lastRow.cursor_user_id } : null)
+    setStudentsHasMore(rows.length === ALUNOS_PAGE_SIZE)
+  }
+
+  async function handleLoadMoreAlunos() {
+    if (!studentsCursor || loadingMoreStudents) return
+    setLoadingMoreStudents(true)
+    setError(null)
+
+    try {
+      const rows = await adminRpc<UserProgramRow[]>("admin_user_programs_list", {
+        p_search_email_exact: appliedEmailQuery.trim() || null,
+        p_tier: planoFilter === PLANO_FILTER_ALL ? null : planoFilter,
+        p_before_created_at: studentsCursor.createdAt,
+        p_before_user_id: studentsCursor.userId,
+        p_limit: ALUNOS_PAGE_SIZE,
+      })
+
+      setStudents((current) => [...current, ...rows])
+
+      const lastRow = rows[rows.length - 1]
+      setStudentsCursor(lastRow ? { createdAt: lastRow.cursor_created_at, userId: lastRow.cursor_user_id } : null)
+      setStudentsHasMore(rows.length === ALUNOS_PAGE_SIZE)
+    } catch (loadError) {
+      setError(errorMessage(loadError))
+    } finally {
+      setLoadingMoreStudents(false)
+    }
   }
 
   async function handleLiberarProtocolo(aluno: UserProgramRow) {
@@ -530,20 +589,8 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   // cada segundo, é uma lista admin, não uma tela de countdown ao vivo.
   const nowMs = useMemo(() => Date.now(), [students])
 
-  const alunosStats = useMemo(
-    () => ({
-      noApp: students.length,
-      comProtocolo: students.filter((student) => programStatus(student, nowMs) === "com_protocolo").length,
-      aguardandoLiberacao: students.filter((student) => programStatus(student, nowMs) === "aguardando_liberacao")
-        .length,
-      gerando: students.filter((student) => programStatus(student, nowMs) === "gerando").length,
-      semProtocolo: students.filter((student) => !student.has_program).length,
-    }),
-    [students, nowMs]
-  )
-
   const pagedAlunos = forceEmpty ? [] : students
-  const alunosHasMore = false
+  const alunosHasMore = !forceEmpty && studentsHasMore
   const isAlunoSearchFiltered = appliedEmailQuery.trim() !== "" || planoFilter !== PLANO_FILTER_ALL
 
   function handleBuscarAluno() {
@@ -1021,15 +1068,15 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
 
           <TabsContent value="treinos" className="space-y-6">
             <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-              <StatTile icon={Users} label="No app" value={alunosStats.noApp} tone="blue" />
-              <StatTile icon={CheckCircle2} label="Com protocolo" value={alunosStats.comProtocolo} tone="green" />
+              <StatTile icon={Users} label="No app" value={programsStats.no_app} tone="blue" />
+              <StatTile icon={CheckCircle2} label="Com protocolo" value={programsStats.com_protocolo} tone="green" />
               <StatTile
                 icon={Clock}
                 label="Aguardando liberação"
-                value={alunosStats.aguardandoLiberacao}
+                value={programsStats.aguardando_liberacao}
                 tone="amber"
               />
-              <StatTile icon={Lock} label="Sem protocolo" value={alunosStats.semProtocolo} tone="purple" />
+              <StatTile icon={Lock} label="Sem protocolo" value={programsStats.sem_protocolo} tone="purple" />
             </div>
 
             <Card>
@@ -1127,8 +1174,13 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
 
             {alunosHasMore && (
               <div className="flex justify-center">
-                <Button type="button" variant="outline" disabled>
-                  Carregar mais
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleLoadMoreAlunos}
+                  disabled={loadingMoreStudents}
+                >
+                  {loadingMoreStudents ? "Carregando..." : "Carregar mais"}
                 </Button>
               </div>
             )}
