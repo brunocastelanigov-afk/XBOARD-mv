@@ -298,11 +298,16 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     setAppliedSearch(value.trim())
   }
 
+  const isFirstLoadRef = useRef(true)
+  const [searching, setSearching] = useState(false)
+
   useEffect(() => {
     let active = true
+    const isFirstLoad = isFirstLoadRef.current
 
     async function loadUsers() {
-      setLoading(true)
+      if (isFirstLoad) setLoading(true)
+      else setSearching(true)
       setError(null)
 
       try {
@@ -336,7 +341,14 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
         setLeads([])
         setError(loadError instanceof Error ? loadError.message : "Erro ao carregar usuários.")
       } finally {
-        if (active) setLoading(false)
+        if (active) {
+          if (isFirstLoad) {
+            setLoading(false)
+            isFirstLoadRef.current = false
+          } else {
+            setSearching(false)
+          }
+        }
       }
     }
 
@@ -530,6 +542,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
             onSearch={handleSearchEnter}
             className="w-full lg:w-[240px]"
           />
+          {searching && <span className="text-sm text-muted-foreground">Buscando...</span>}
           <Select value={objetivo} onValueChange={setObjetivo}>
             <SelectTrigger className="w-full lg:w-[170px]">
               <SelectValue placeholder="Objetivo" />
