@@ -874,17 +874,6 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     )
   }
 
-  function updateProgramDay(index: number, patch: Partial<ProgramForm["days"][number]>) {
-    setProgramFormState((current) =>
-      current
-        ? {
-            ...current,
-            days: current.days.map((day, dayIndex) => (dayIndex === index ? { ...day, ...patch } : day)),
-          }
-        : current
-    )
-  }
-
   function updateProgramExercise(dayIndex: number, exerciseIndex: number, patch: Partial<ProgramForm["days"][number]["exercicios"][number]>) {
     setProgramFormState((current) =>
       current
@@ -1768,31 +1757,12 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
 
                       <Card className="ml-4 rounded-lg border-border">
                         <CardContent className="space-y-4 p-4">
-                            <label className="block space-y-1.5">
-                              <span className="text-xs font-medium uppercase text-muted-foreground">Nome do treino</span>
-                              <Input
-                                value={day.nome}
-                                onChange={(event) => updateProgramDay(dayIndex, { nome: event.target.value })}
-                                placeholder="Nome do treino"
-                              />
-                            </label>
-                            <label className="block space-y-1.5">
-                              <span className="text-xs font-medium uppercase text-muted-foreground">Foco</span>
-                              <Input
-                                value={day.foco}
-                                onChange={(event) => updateProgramDay(dayIndex, { foco: event.target.value })}
-                                placeholder="Foco"
-                              />
-                            </label>
-                            <label className="block space-y-1.5">
-                              <span className="text-xs font-medium uppercase text-muted-foreground">
-                                Imagem do treino (opcional)
-                              </span>
-                              <Input
-                                value={day.imagemUrl}
-                                onChange={(event) => updateProgramDay(dayIndex, { imagemUrl: event.target.value })}
-                                placeholder="https://..."
-                              />
+                            <div className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+                              <p className="text-xs font-medium uppercase text-muted-foreground">
+                                Nome, foco e imagem do treino (somente leitura — edite pelo protocolo geral)
+                              </p>
+                              <p className="text-sm font-medium text-foreground">{day.nome || "Sem nome"}</p>
+                              {day.foco && <p className="text-sm text-muted-foreground">{day.foco}</p>}
                               {day.imagemUrl.trim() && (
                                 // eslint-disable-next-line @next/next/no-img-element
                                 <img
@@ -1801,7 +1771,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                   className="h-24 w-full rounded-md border border-border object-cover"
                                 />
                               )}
-                            </label>
+                            </div>
 
                             <div className="space-y-2 border-t border-border pt-3">
                               <div className="flex items-center justify-between">
@@ -1925,62 +1895,37 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                                 </label>
                                               </div>
 
-                                              <div className="space-y-1.5">
-                                                <p className="text-xs font-medium uppercase text-muted-foreground">
-                                                  Vídeo do exercício (opcional)
-                                                </p>
-                                                <p className="text-xs text-muted-foreground">
-                                                  {catalogEntry?.video_url && !exercise.videoUrlOverride
-                                                    ? "Mostrando o vídeo cadastrado para este exercício. Edite para sobrescrever só para este aluno."
-                                                    : "Cole um link do YouTube ou qualquer URL de vídeo. No app, ele aparece dentro da tela do exercício."}
-                                                </p>
-                                                <Input
-                                                  value={effectiveVideoUrl}
-                                                  onChange={(event) =>
-                                                    updateProgramExercise(dayIndex, exerciseIndex, {
-                                                      videoUrlOverride: event.target.value,
-                                                    })
-                                                  }
-                                                  placeholder="https://..."
-                                                />
-                                                {embedUrl ? (
-                                                  <div className="aspect-video overflow-hidden rounded-lg border border-border bg-muted">
-                                                    <iframe
-                                                      src={embedUrl}
-                                                      className="h-full w-full"
-                                                      allowFullScreen
-                                                      title="Preview do vídeo"
-                                                    />
-                                                  </div>
-                                                ) : null}
-                                              </div>
-
-                                              <label className="block space-y-1.5">
-                                                <span className="text-xs font-medium uppercase text-muted-foreground">
-                                                  Como executar (opcional)
-                                                </span>
-                                                <Textarea
-                                                  value={effectiveInstrucao}
-                                                  onChange={(event) =>
-                                                    updateProgramExercise(dayIndex, exerciseIndex, {
-                                                      instrucaoTextoOverride: event.target.value,
-                                                    })
-                                                  }
-                                                  placeholder="Como executar (opcional)"
-                                                />
-                                              </label>
-                                              <label className="block space-y-1.5">
-                                                <span className="text-xs font-medium uppercase text-muted-foreground">
-                                                  Observações e cuidados (opcional)
-                                                </span>
-                                                <Textarea
-                                                  value={exercise.observacoes}
-                                                  onChange={(event) =>
-                                                    updateProgramExercise(dayIndex, exerciseIndex, { observacoes: event.target.value })
-                                                  }
-                                                  placeholder="Observações e cuidados (opcional)"
-                                                />
-                                              </label>
+                                              {(effectiveVideoUrl || effectiveInstrucao) && (
+                                                <div className="space-y-2 rounded-md border border-border bg-muted/20 p-3">
+                                                  <p className="text-xs font-medium uppercase text-muted-foreground">
+                                                    Vídeo e instruções do exercício (somente leitura — edite pela aba Exercícios)
+                                                  </p>
+                                                  {effectiveVideoUrl && (
+                                                    <p className="truncate text-sm text-foreground">Vídeo: {effectiveVideoUrl}</p>
+                                                  )}
+                                                  {embedUrl ? (
+                                                    <div className="aspect-video overflow-hidden rounded-lg border border-border bg-muted">
+                                                      <iframe
+                                                        src={embedUrl}
+                                                        className="h-full w-full"
+                                                        allowFullScreen
+                                                        title="Preview do vídeo"
+                                                      />
+                                                    </div>
+                                                  ) : null}
+                                                  {effectiveInstrucao && (
+                                                    <p className="text-sm text-foreground">Como executar: {effectiveInstrucao}</p>
+                                                  )}
+                                                </div>
+                                              )}
+                                              {exercise.observacoes && (
+                                                <div className="space-y-1 rounded-md border border-border bg-muted/20 p-3">
+                                                  <p className="text-xs font-medium uppercase text-muted-foreground">
+                                                    Observações e cuidados (somente leitura)
+                                                  </p>
+                                                  <p className="text-sm text-foreground">{exercise.observacoes}</p>
+                                                </div>
+                                              )}
                                             </CardContent>
                                           </Card>
                                         )}
