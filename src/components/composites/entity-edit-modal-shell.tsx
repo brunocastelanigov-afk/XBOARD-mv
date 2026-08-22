@@ -35,16 +35,22 @@ export function EntityEditModalShell({
       open
       onOpenChange={(open, eventDetails) => {
         if (open) return
-        if (eventDetails.reason === "outside-press") {
-          const target = eventDetails.event.target
-          // Selects/popovers do Radix (ex: atoms/select.tsx) portalizam seu
-          // conteúdo em document.body, fora da subárvore do Popup do Base UI.
-          // O Base UI lê cliques nesse conteúdo como "fora" do modal e o
-          // fecharia — cancelamos nesse caso específico.
-          if (target instanceof Element && target.closest("[data-radix-popper-content-wrapper]")) {
-            eventDetails.cancel()
-            return
-          }
+        // Selects/popovers do Radix (ex: atoms/select.tsx) portalizam seu
+        // conteúdo em document.body, fora da subárvore do Popup do Base UI,
+        // e escondem os demais elementos do body via aria-hidden enquanto
+        // abertos (aria-hidden package / hideOthers). Isso faz o Base UI
+        // enxergar QUALQUER clique nessa hora — mesmo dentro do card do
+        // modal, não só no dropdown — como "fora" do Popup (reason
+        // "outside-press" ou "focus-out"), fechando o modal por engano.
+        // Checamos se ainda existe um popper Radix aberto no documento no
+        // instante do evento: a remoção do nó do DOM só acontece num
+        // re-render do React, que nunca ocorre de forma síncrona durante o
+        // mesmo despacho do evento nativo — então essa checagem é confiável
+        // independente da ordem dos listeners entre as duas libs.
+        const nestedRadixPopoverOpen = document.querySelector("[data-radix-popper-content-wrapper]") !== null
+        if (nestedRadixPopoverOpen && (eventDetails.reason === "outside-press" || eventDetails.reason === "focus-out")) {
+          eventDetails.cancel()
+          return
         }
         onClose()
       }}
