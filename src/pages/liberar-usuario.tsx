@@ -18,6 +18,7 @@ import {
 import { SearchInput } from "@/components/atoms/search-input"
 import { Skeleton } from "@/components/atoms/skeleton"
 import { ToggleButtonGroup } from "@/components/atoms/toggle-button-group"
+import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
 import { TwoColumnFormLayout } from "@/components/composites/two-column-form-layout"
 import { adminMutation, adminRpc } from "@/lib/admin-api"
@@ -84,6 +85,9 @@ export function LiberarUsuarioPage({ canEdit: canEditProp }: LiberarUsuarioPageP
   const [createError, setCreateError] = useState<string | null>(null)
   const [createdUser, setCreatedUser] = useState<AdminUserMutationResponse | null>(null)
 
+  const [pendingRenewal, setPendingRenewal] = useState<{ userId: string; tier: Tier } | null>(null)
+  const [renewState, setRenewState] = useState<SaveState>("idle")
+
   const [searchEmail, setSearchEmail] = useState("")
   const [searchState, setSearchState] = useState<SearchState>("idle")
   const [searchError, setSearchError] = useState<string | null>(null)
@@ -106,14 +110,32 @@ export function LiberarUsuarioPage({ canEdit: canEditProp }: LiberarUsuarioPageP
     setCreatedUser(null)
 
     try {
-      const user = await adminMutation<AdminUserMutationResponse>("/admin/users", {
-        method: "POST",
-        body: { email, nomeCompleto, tier },
-      })
-      const released = await adminMutation<AdminUserMutationResponse>(`/admin/users/${user.userId}/release`, {
-        method: "POST",
-        body: { tier },
-      })
+      const rows = await adminRpc<AdminUserLookupRow[]>("admin_user_lookup_by_email", { p_email: email })
+      const existing = rows[0]
+
+      if (existing && existing.is_active && existing.tier === tier) {
+        setPendingRenewal({ userId: existing.user_id, tier })
+        setCreateState("idle")
+        return
+      }
+
+      let released: AdminUserMutationResponse
+      if (existing) {
+        released = await adminMutation<AdminUserMutationResponse>(`/admin/users/${existing.user_id}/release`, {
+          method: "POST",
+          body: { tier },
+        })
+      } else {
+        const user = await adminMutation<AdminUserMutationResponse>("/admin/users", {
+          method: "POST",
+          body: { email, nomeCompleto, tier },
+        })
+        released = await adminMutation<AdminUserMutationResponse>(`/admin/users/${user.userId}/release`, {
+          method: "POST",
+          body: { tier },
+        })
+      }
+
       setCreatedUser(released)
       setCreateState("done")
       setCreateName("")
@@ -123,6 +145,34 @@ export function LiberarUsuarioPage({ canEdit: canEditProp }: LiberarUsuarioPageP
       setCreateError(errorMessage(error))
       setCreateState("idle")
     }
+  }
+
+  async function handleConfirmRenewal() {
+    if (!pendingRenewal || renewState !== "idle") return
+    setRenewState("saving")
+    setCreateError(null)
+
+    try {
+      const released = await adminMutation<AdminUserMutationResponse>(
+        `/admin/users/${pendingRenewal.userId}/release`,
+        { method: "POST", body: { tier: pendingRenewal.tier } }
+      )
+      setCreatedUser(released)
+      setCreateState("done")
+      setCreateName("")
+      setCreateEmail("")
+      setCreatePlan("trinca")
+      setRenewState("idle")
+      setPendingRenewal(null)
+    } catch (error) {
+      setCreateError(errorMessage(error))
+      setRenewState("idle")
+      setPendingRenewal(null)
+    }
+  }
+
+  function handleCancelRenewal() {
+    setPendingRenewal(null)
   }
 
   async function handleSearch(value: string) {
@@ -454,6 +504,31 @@ export function LiberarUsuarioPage({ canEdit: canEditProp }: LiberarUsuarioPageP
               </p>
             </CardContent>
           </Card>
+        )}
+
+        {pendingRenewal && (
+          <EntityEditModalShell
+            title="Usuário já possui este plano"
+            description="Este e-mail já está ativo com o mesmo plano selecionado. Deseja renovar a data de vencimento dele agora?"
+            onClose={handleCancelRenewal}
+            footer={
+              <>
+                <Button type="button" variant="outline" onClick={handleCancelRenewal}>
+                  Não
+                </Button>
+                <Button type="button" onClick={handleConfirmRenewal} disabled={renewState === "saving"}>
+                  {renewState === "saving" ? (
+                    <>
+                      <Loader2 className="animate-spin" />
+                      Renovando...
+                    </>
+                  ) : (
+                    "Sim, renovar vencimento"
+                  )}
+                </Button>
+              </>
+            }
+          />
         )}
       </div>
     </div>

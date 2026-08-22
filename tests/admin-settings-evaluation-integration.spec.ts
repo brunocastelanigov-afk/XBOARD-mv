@@ -53,16 +53,6 @@ async function mockConfiguracoesReads(page: Page) {
       ]),
     })
   )
-  await page.route("**/rest/v1/rpc/admin_lastlink_product_map*", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([
-        { product_id: "prod-trinca", tier: "mvp", is_upsell: false, label: "Produto Trinca" },
-        { product_id: "prod-elite", tier: "elite", is_upsell: false, label: "Produto Elite" },
-      ]),
-    })
-  )
 }
 
 async function mockAvaliacaoReads(page: Page) {
@@ -178,7 +168,7 @@ async function mockAvaliacaoReads(page: Page) {
 }
 
 test.describe("Story 15.7 — Configuracoes e Avaliacao reais", () => {
-  test("Configuracoes carrega settings/mapa LastLink e salva via worker com Idempotency-Key", async ({ page }) => {
+  test("Configuracoes carrega app/suporte e salva via worker com Idempotency-Key", async ({ page }) => {
     await mockCrmSession(page)
     await mockConfiguracoesReads(page)
 
@@ -192,51 +182,27 @@ test.describe("Story 15.7 — Configuracoes e Avaliacao reais", () => {
           upgradeUrl: "https://checkout.example.com/upgrade-novo",
           renewalTrincaUrl: "https://checkout.example.com/trinca",
           renewalEliteUrl: "https://checkout.example.com/elite",
-          supportUrl: "https://suporte.example.com",
+          supportUrl: "https://suporte.example.com/novo",
           trincaValidityDays: 365,
           eliteValidityDays: 90,
           updatedAt: "2026-08-13T12:30:00.000Z",
         }),
       })
     })
-    await page.route("**/admin/settings/reassessment", async (route) => {
-      mutationHeaders.push(route.request().headers())
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ reassessmentDays: 60, updatedAt: "2026-08-13T12:31:00.000Z" }),
-      })
-    })
-    await page.route("**/admin/lastlink-product-map/prod-trinca", async (route) => {
-      mutationHeaders.push(route.request().headers())
-      expect(route.request().postDataJSON()).toEqual({
-        productId: "prod-trinca-qa",
-        label: "Produto Trinca QA",
-      })
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ productId: "prod-trinca-qa", tier: "mvp", isUpsell: false, label: "Produto Trinca QA" }),
-      })
-    })
 
     await page.goto("/crm/configuracoes")
 
     await expect(page.locator('input[value="Treino Trinca"]')).toBeVisible()
-    await expect(page.getByText("prod-trinca").first()).toBeVisible()
-    await expect(page.getByText(/app ainda não consome esse prazo/)).toBeVisible()
+    await expect(page.getByText("Funil, produtos e Elite")).toHaveCount(0)
+    await expect(page.getByText("Mapa LastLink")).toHaveCount(0)
+    await expect(page.getByText("Prazo de Reavaliação")).toHaveCount(0)
 
-    await page.locator('input[value="prod-trinca"]').fill("prod-trinca-qa")
-    await page.locator('input[value="Produto Trinca"]').fill("Produto Trinca QA")
-    await page.getByRole("button", { name: "Salvar produto" }).first().click()
-
-    await page.locator('input[value="https://checkout.example.com/trinca"]').fill("https://checkout.example.com/trinca-novo")
+    await page
+      .locator('input[value="https://suporte.example.com"]')
+      .fill("https://suporte.example.com/novo")
     await page.getByRole("button", { name: "Salvar configurações" }).click()
 
-    await page.getByRole("spinbutton").last().fill("60")
-    await page.getByRole("button", { name: "Aplicar" }).click()
-
-    expect(mutationHeaders).toHaveLength(3)
+    expect(mutationHeaders).toHaveLength(1)
     for (const headers of mutationHeaders) {
       expect(headers.authorization).toBe("Bearer crm-story-15-7-token")
       expect(headers["idempotency-key"]).toBeTruthy()
@@ -276,7 +242,7 @@ test.describe("Story 15.7 — Configuracoes e Avaliacao reais", () => {
     await expect(page.getByText("Contagem por opção")).toBeVisible()
     await expect(page.getByText("Mulher")).toBeVisible()
 
-    await page.getByRole("tab", { name: /Sugestões/ }).click()
+    await page.goto("/crm/sugestoes")
     await expect(page.getByText("Adicionar treino de mobilidade")).toBeVisible()
     await page.getByRole("button", { name: "Revisada" }).click()
 

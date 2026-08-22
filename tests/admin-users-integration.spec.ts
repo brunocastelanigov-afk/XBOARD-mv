@@ -140,25 +140,29 @@ test.describe("Story 15.5 — Usuarios e Liberar Usuario reais", () => {
     await mockCrmSession(page)
 
     const mutationHeaders: string[] = []
-    await page.route("**/rest/v1/rpc/admin_user_lookup_by_email*", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify([
-          {
-            user_id: "22222222-2222-4222-8222-222222222222",
-            email: "existente@example.com",
-            nome_completo: "Aluno Existente",
-            tier: "mvp",
-            role: "user",
-            is_active: true,
-            access_status: "trinca",
-            revenue_net_cents: 29700,
-            created_at: "2026-08-13T10:00:00.000Z",
-          },
-        ]),
-      })
-    )
+    await page.route("**/rest/v1/rpc/admin_user_lookup_by_email*", (route) => {
+      const email = route.request().postDataJSON()?.p_email
+      if (email === "existente@example.com") {
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify([
+            {
+              user_id: "22222222-2222-4222-8222-222222222222",
+              email: "existente@example.com",
+              nome_completo: "Aluno Existente",
+              tier: "mvp",
+              role: "user",
+              is_active: true,
+              access_status: "trinca",
+              revenue_net_cents: 29700,
+              created_at: "2026-08-13T10:00:00.000Z",
+            },
+          ]),
+        })
+      }
+      return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([]) })
+    })
     await page.route("**/admin/users", async (route) => {
       mutationHeaders.push(route.request().headers()["idempotency-key"] ?? "")
       await route.fulfill({
@@ -219,5 +223,118 @@ test.describe("Story 15.5 — Usuarios e Liberar Usuario reais", () => {
 
     expect(mutationHeaders).toHaveLength(4)
     expect(mutationHeaders.every(Boolean)).toBe(true)
+  })
+
+  test("Criar usuario com email de aluno inativo apenas libera o plano, sem recriar a conta", async ({ page }) => {
+    await mockCrmSession(page)
+
+    let createCalled = false
+    let releaseBody: unknown = null
+    await page.route("**/rest/v1/rpc/admin_user_lookup_by_email*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            user_id: "44444444-4444-4444-8444-444444444444",
+            email: "inativo@example.com",
+            nome_completo: "Aluno Inativo",
+            tier: "mvp",
+            role: "user",
+            is_active: false,
+            access_status: "trinca",
+            revenue_net_cents: 0,
+            created_at: "2026-08-13T10:00:00.000Z",
+          },
+        ]),
+      })
+    )
+    await page.route("**/admin/users", async () => {
+      createCalled = true
+    })
+    await page.route("**/admin/users/*/release", async (route) => {
+      releaseBody = route.request().postDataJSON()
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          userId: "44444444-4444-4444-8444-444444444444",
+          email: "inativo@example.com",
+          nomeCompleto: "Aluno Inativo",
+          tier: "mvp",
+          role: "user",
+          isActive: true,
+        }),
+      })
+    })
+
+    await page.goto("/crm/liberar-usuario")
+
+    await page.getByPlaceholder("Nome do aluno").fill("Aluno Inativo")
+    await page.getByPlaceholder("aluno@email.com").fill("inativo@example.com")
+    await page.getByRole("button", { name: /criar e liberar/i }).click()
+    await expect(page.getByText("Usuário criado e liberado: inativo@example.com")).toBeVisible()
+
+    expect(createCalled).toBe(false)
+    expect(releaseBody).toEqual({ tier: "mvp" })
+  })
+
+  test("Criar usuario com email ja ativo no mesmo plano abre modal bloqueante de renovacao", async ({ page }) => {
+    await mockCrmSession(page)
+
+    let releaseCalls = 0
+    await page.route("**/rest/v1/rpc/admin_user_lookup_by_email*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            user_id: "55555555-5555-4555-8555-555555555555",
+            email: "ativo@example.com",
+            nome_completo: "Aluno Ativo",
+            tier: "mvp",
+            role: "user",
+            is_active: true,
+            access_status: "trinca",
+            revenue_net_cents: 0,
+            created_at: "2026-08-13T10:00:00.000Z",
+          },
+        ]),
+      })
+    )
+    await page.route("**/admin/users/*/release", async (route) => {
+      releaseCalls += 1
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          userId: "55555555-5555-4555-8555-555555555555",
+          email: "ativo@example.com",
+          nomeCompleto: "Aluno Ativo",
+          tier: "mvp",
+          role: "user",
+          isActive: true,
+        }),
+      })
+    })
+
+    await page.goto("/crm/liberar-usuario")
+
+    await page.getByPlaceholder("Nome do aluno").fill("Aluno Ativo")
+    await page.getByPlaceholder("aluno@email.com").fill("ativo@example.com")
+    await page.getByRole("button", { name: /criar e liberar/i }).click()
+
+    await expect(page.getByText("Usuário já possui este plano")).toBeVisible()
+    expect(releaseCalls).toBe(0)
+
+    await page.getByRole("button", { name: "Não" }).click()
+    await expect(page.getByText("Usuário já possui este plano")).not.toBeVisible()
+    expect(releaseCalls).toBe(0)
+
+    await page.getByRole("button", { name: /criar e liberar/i }).click()
+    await expect(page.getByText("Usuário já possui este plano")).toBeVisible()
+    await page.getByRole("button", { name: /sim, renovar vencimento/i }).click()
+    await expect(page.getByText("Usuário criado e liberado: ativo@example.com")).toBeVisible()
+    expect(releaseCalls).toBe(1)
   })
 })
