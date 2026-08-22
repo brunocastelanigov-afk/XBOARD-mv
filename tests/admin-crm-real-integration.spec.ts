@@ -245,27 +245,14 @@ test.describe("Story 15.6 — integrações reais Admin CRM", () => {
     await mockExerciseReads(page)
   })
 
-  test("Regras carrega contratos read-only e testador chama endpoint real", async ({ page }) => {
-    let testCalled = false
-    await page.route("**/admin/classification-rules/test", async (route) => {
-      testCalled = true
-      const body = route.request().postDataJSON() as { respostas: { pergunta: string; resposta: string }[] }
-      expect(body.respostas.length).toBeGreaterThan(0)
-      return route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ nivel: "iniciante", fieldValues: { idade: "60" } }),
-      })
-    })
-
+  test("Regras carrega contratos read-only via admin_classification_rules_list", async ({ page }) => {
+    // A aba "Testador" (e o botão "Testar Classificação") foi removida do
+    // dashboard — só a listagem read-only de regras permanece nesta
+    // página. O endpoint POST /admin/classification-rules/test continua
+    // existindo no worker (usado por outro caller), mas não tem mais UI
+    // aqui pra exercitar.
     await page.goto("/crm/regras")
     await expect(page.getByText("Override por idade")).toBeVisible()
-    await page.getByRole("tab", { name: /Testador/ }).click()
-    await page.getByRole("button", { name: "Sênior 60 anos" }).click()
-    await page.getByRole("button", { name: "Testar Classificação" }).click()
-
-    await expect(page.getByText("Resultado: Iniciante")).toBeVisible()
-    expect(testCalled).toBe(true)
   })
 
   test("Protocolos usa RPCs reais e mutações /admin/protocol-templates e /admin/users/:id/program", async ({

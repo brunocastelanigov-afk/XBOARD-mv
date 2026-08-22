@@ -165,7 +165,10 @@ test.describe("Story 15.5 — Usuarios e Liberar Usuario reais", () => {
     // mas a RPC admin_users_filter_options mockada devolve ["Crescer",
     // "Secar"] -- prova que a lista de opções não é mais derivada de
     // leads carregados, e sim da MV via RPC dedicada.
-    await page.getByRole("combobox", { name: /objetivo/i }).click()
+    // O combobox de Objetivo não tem nome acessível fixo (mostra o valor
+    // selecionado, "Todos objetivos", não um label) — é o 1º dos 3
+    // comboboxes na barra de filtros (Objetivo, Sexo, Status, nessa ordem).
+    await page.getByRole("combobox").first().click()
     await expect(page.getByRole("option", { name: "Secar" })).toBeVisible()
   })
 
