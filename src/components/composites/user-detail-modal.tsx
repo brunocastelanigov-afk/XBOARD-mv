@@ -29,8 +29,16 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/atoms/tab
 import { ToggleButtonGroup, type ToggleButtonGroupOption } from "@/components/atoms/toggle-button-group"
 import { EntityCard } from "@/components/composites/entity-card"
 import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
+import { ProgramExerciseEditor } from "@/components/composites/program-exercise-editor"
 import { ProtocolTemplatePicker, type ProtocolEditorTemplateOption } from "@/components/composites/protocol-editor"
+import { useProgramExerciseEditor } from "@/hooks/use-program-exercise-editor"
 import { adminMutation, adminRpc } from "@/lib/admin-api"
+import {
+  buildProgramFormDays,
+  programPayload,
+  type AdminExerciseCatalogRow,
+  type ProgramDetailRow,
+} from "@/lib/program-exercise-editor"
 import { cn } from "@/lib/utils"
 
 type AdminTemporaryPasswordResponse =
@@ -280,6 +288,61 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
     }
   }
 
+  // Problema 02 (dev-acjustment): edição do treino individual (dias/
+  // exercícios do protocolo atual) — mesma lógica de
+  // openTreinoIndividualModal/modo "program" de src/pages/protocolos.tsx,
+  // copiada (não compartilhada) para não mexer num fluxo já em produção.
+  const [treinoDetail, setTreinoDetail] = React.useState<ProgramDetailRow | null>(null)
+  const [treinoCatalog, setTreinoCatalog] = React.useState<AdminExerciseCatalogRow[] | null>(null)
+  const [treinoLoadError, setTreinoLoadError] = React.useState<string | null>(null)
+  const [treinoSaveState, setTreinoSaveState] = React.useState<"idle" | "saving" | "saved">("idle")
+  const [treinoSaveError, setTreinoSaveError] = React.useState<string | null>(null)
+  const [expandedTreinoExerciseKey, setExpandedTreinoExerciseKey] = React.useState<string | null>(null)
+  const [treinoExercisePickerQuery, setTreinoExercisePickerQuery] = React.useState("")
+  const [treinoConfirmRemoval, setTreinoConfirmRemoval] = React.useState<
+    { dayIndex: number; exerciseIndex: number; label: string } | null
+  >(null)
+
+  const programEditor = useProgramExerciseEditor([])
+
+  async function loadTreinoTab() {
+    if (treinoDetail !== null || !canEdit || !user.protocolo.liberado) return
+    setTreinoLoadError(null)
+    try {
+      const [detailRows, catalogRows] = await Promise.all([
+        adminRpc<ProgramDetailRow[]>("admin_user_program_detail", { p_user_id: user.id }),
+        adminRpc<AdminExerciseCatalogRow[]>("admin_exercises_list", { p_is_active: true, p_limit: 500 }),
+      ])
+      const detail = detailRows[0]
+      if (!detail?.program_id) {
+        setTreinoLoadError("Usuário sem programa atual para editar.")
+        return
+      }
+      setTreinoDetail(detail)
+      programEditor.resetDays(buildProgramFormDays(detail))
+      setTreinoCatalog(catalogRows)
+    } catch (loadError) {
+      setTreinoLoadError(errorMessage(loadError))
+    }
+  }
+
+  async function handleSaveTreino() {
+    if (!treinoDetail || treinoSaveState !== "idle") return
+    setTreinoSaveState("saving")
+    setTreinoSaveError(null)
+    try {
+      await adminMutation(`/admin/users/${user.id}/program`, {
+        method: "PATCH",
+        body: programPayload(programEditor.days),
+      })
+      setTreinoSaveState("saved")
+      window.setTimeout(() => setTreinoSaveState("idle"), 1600)
+    } catch (saveError) {
+      setTreinoSaveError(errorMessage(saveError))
+      setTreinoSaveState("idle")
+    }
+  }
+
   return (
     <EntityEditModalShell
       title={user.name}
@@ -302,6 +365,7 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
         defaultValue="dados"
         onValueChange={(value) => {
           if (value === "protocolo") void loadProtocolTab()
+          if (value === "treino") void loadTreinoTab()
         }}
       >
         <TabsList>
@@ -321,6 +385,12 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
             <TabsTrigger value="protocolo" className="gap-1.5">
               <FileStack className="size-4" />
               Protocolo
+            </TabsTrigger>
+          )}
+          {canEdit && user.protocolo.liberado && (
+            <TabsTrigger value="treino" className="gap-1.5">
+              <Dumbbell className="size-4" />
+              Treino
             </TabsTrigger>
           )}
         </TabsList>
@@ -608,7 +678,84 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
             )}
           </TabsContent>
         )}
+
+        {canEdit && user.protocolo.liberado && (
+          <TabsContent value="treino" className="space-y-4">
+            {treinoLoadError ? (
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {treinoLoadError}
+              </p>
+            ) : treinoDetail === null ? (
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </div>
+            ) : (
+              <>
+                <ProgramExerciseEditor
+                  days={programEditor.days}
+                  exerciseCatalog={treinoCatalog ?? []}
+                  expandedExerciseKey={expandedTreinoExerciseKey}
+                  onExpandExercise={(key) => {
+                    setExpandedTreinoExerciseKey(key)
+                    setTreinoExercisePickerQuery("")
+                  }}
+                  exercisePickerQuery={treinoExercisePickerQuery}
+                  onExercisePickerQueryChange={setTreinoExercisePickerQuery}
+                  onAddExercise={(dayIndex) => {
+                    const fallback = treinoCatalog?.[0]
+                    if (fallback) programEditor.addExercise(dayIndex, fallback)
+                  }}
+                  onUpdateExercise={programEditor.updateExercise}
+                  onRemoveExerciseRequest={(dayIndex, exerciseIndex, label) =>
+                    setTreinoConfirmRemoval({ dayIndex, exerciseIndex, label })
+                  }
+                  onReorderExercises={programEditor.reorderExercises}
+                  onSelectExercise={programEditor.selectExercise}
+                />
+                {treinoSaveError && (
+                  <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {treinoSaveError}
+                  </p>
+                )}
+                <Button
+                  type="button"
+                  disabled={treinoSaveState !== "idle"}
+                  onClick={() => void handleSaveTreino()}
+                  className="w-full"
+                >
+                  {treinoSaveState === "saving" ? "Salvando..." : treinoSaveState === "saved" ? "Salvo!" : "Salvar treino"}
+                </Button>
+              </>
+            )}
+          </TabsContent>
+        )}
       </Tabs>
+
+      {treinoConfirmRemoval && (
+        <EntityEditModalShell
+          title="Remover exercício"
+          description={`Tem certeza que deseja remover "${treinoConfirmRemoval.label}" deste treino? O exercício continua cadastrado no catálogo — isso só tira ele desta lista, e só para este aluno.`}
+          onClose={() => setTreinoConfirmRemoval(null)}
+          footer={
+            <>
+              <Button type="button" variant="outline" onClick={() => setTreinoConfirmRemoval(null)}>
+                Cancelar
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={() => {
+                  programEditor.removeExercise(treinoConfirmRemoval.dayIndex, treinoConfirmRemoval.exerciseIndex)
+                  setTreinoConfirmRemoval(null)
+                }}
+              >
+                Remover
+              </Button>
+            </>
+          }
+        />
+      )}
     </EntityEditModalShell>
   )
 }
