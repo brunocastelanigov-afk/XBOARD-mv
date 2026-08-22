@@ -109,6 +109,14 @@ function centsToReais(cents: unknown) {
   return typeof cents === "number" ? cents / 100 : 0
 }
 
+function buildSearchParams(term: string) {
+  const trimmed = term.trim()
+  if (!trimmed) return {}
+  return trimmed.includes("@")
+    ? { p_search_email_prefix: trimmed }
+    : { p_search_name_prefix: trimmed }
+}
+
 function stringValue(value: unknown) {
   return typeof value === "string" && value.trim() ? value.trim() : null
 }
@@ -277,6 +285,19 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
   const [lastAppliedText, setLastAppliedText] = useState<string | undefined>()
   const [applyState, setApplyState] = useState<ApplyValueCardApplyState>("idle")
 
+  const [appliedSearch, setAppliedSearch] = useState("")
+
+  useEffect(() => {
+    const handle = setTimeout(() => {
+      setAppliedSearch(search.trim())
+    }, 400)
+    return () => clearTimeout(handle)
+  }, [search])
+
+  function handleSearchEnter(value: string) {
+    setAppliedSearch(value.trim())
+  }
+
   useEffect(() => {
     let active = true
 
@@ -285,8 +306,9 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
       setError(null)
 
       try {
+        const searchParams = buildSearchParams(appliedSearch)
         const [users, rank, settings, statsRows] = await Promise.all([
-          adminRpc<AdminUserListRow[]>("admin_users_list", { p_limit: 100 }),
+          adminRpc<AdminUserListRow[]>("admin_users_list", { p_limit: 100, ...searchParams }),
           adminRpc<AdminUsersRevenueRankRow[]>("admin_users_revenue_rank", { p_limit: 100 }),
           adminRpc<AdminAppSettingsRow[]>("admin_app_settings_current"),
           adminRpc<AdminUserStatsRow[]>("admin_users_stats"),
@@ -323,7 +345,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     return () => {
       active = false
     }
-  }, [])
+  }, [appliedSearch])
 
   async function handleLoadMore() {
     if (!cursor || loadingMore) return
@@ -331,10 +353,12 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     setError(null)
 
     try {
+      const searchParams = buildSearchParams(appliedSearch)
       const users = await adminRpc<AdminUserListRow[]>("admin_users_list", {
         p_before_created_at: cursor.createdAt,
         p_before_user_id: cursor.userId,
         p_limit: 100,
+        ...searchParams,
       })
 
       setLeads((current) => [
@@ -503,6 +527,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
             placeholder="Buscar por nome ou e-mail..."
             value={search}
             onChange={setSearch}
+            onSearch={handleSearchEnter}
             className="w-full lg:w-[240px]"
           />
           <Select value={objetivo} onValueChange={setObjetivo}>
