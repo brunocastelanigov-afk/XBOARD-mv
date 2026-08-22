@@ -1271,9 +1271,10 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
         <EntityEditModalShell
           title={modalMode === "create" ? "Novo protocolo" : "Editar protocolo"}
           onClose={closeModal}
-          footer={
+          primaryAction={
             <Button
               type="button"
+              size="sm"
               disabled={saveState !== "idle"}
               className={saveState === "saved" ? "bg-green-600 hover:bg-green-600 text-white" : undefined}
               onClick={() => void handleSaveProtocolo()}
@@ -1720,8 +1721,13 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
         <EntityEditModalShell
           title="Editar treino individual"
           onClose={closeModal}
-          footer={
-            <Button type="button" disabled={saveState !== "idle" || !programFormState} onClick={() => void handleSaveProgram()}>
+          primaryAction={
+            <Button
+              type="button"
+              size="sm"
+              disabled={saveState !== "idle" || !programFormState}
+              onClick={() => void handleSaveProgram()}
+            >
               {saveState === "saving" ? "Salvando..." : saveState === "saved" ? "Salvo!" : "Salvar treino"}
             </Button>
           }

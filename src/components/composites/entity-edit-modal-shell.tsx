@@ -17,7 +17,9 @@ export interface EntityEditModalShellProps {
   title: string
   description?: string
   onClose: () => void
-  footer: React.ReactNode
+  /** Ação primária (ex: "Salvar"), renderizada no topo do modal, ao lado do botão de fechar. */
+  primaryAction?: React.ReactNode
+  footer?: React.ReactNode
   children?: React.ReactNode
   className?: string
 }
@@ -26,6 +28,7 @@ export function EntityEditModalShell({
   title,
   description,
   onClose,
+  primaryAction,
   footer,
   children,
   className,
@@ -64,7 +67,7 @@ export function EntityEditModalShell({
               className
             )}
           >
-            <CardHeader className="pr-10">
+            <CardHeader className={cn("pr-10", primaryAction && "pr-32")}>
               <DialogPrimitive.Title render={<CardTitle />}>{title}</DialogPrimitive.Title>
               {description && (
                 <DialogPrimitive.Description render={<CardDescription />}>
@@ -73,13 +76,14 @@ export function EntityEditModalShell({
               )}
             </CardHeader>
             <CardContent className="space-y-4 py-4">{children}</CardContent>
-            <CardFooter className="justify-end gap-2">{footer}</CardFooter>
-            <DialogPrimitive.Close
-              render={<Button variant="ghost" size="icon-sm" className="absolute top-3 right-3" />}
-            >
-              <XIcon />
-              <span className="sr-only">Close</span>
-            </DialogPrimitive.Close>
+            {footer && <CardFooter className="justify-end gap-2">{footer}</CardFooter>}
+            <div className="absolute top-3 right-3 flex items-center gap-2">
+              {primaryAction}
+              <DialogPrimitive.Close render={<Button variant="ghost" size="icon-sm" />}>
+                <XIcon />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
+            </div>
           </Card>
         </DialogPrimitive.Popup>
       </DialogPrimitive.Portal>

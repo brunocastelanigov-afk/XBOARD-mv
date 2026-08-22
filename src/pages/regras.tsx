@@ -487,8 +487,8 @@ export function RegrasPage({ canEdit: canEditProp }: RegrasPageProps) {
         <EntityEditModalShell
           title={editingId ? "Editar regra" : "Nova regra"}
           onClose={closeRuleModal}
-          footer={
-            <Button type="submit" form="rule-edit-form" disabled={saving}>
+          primaryAction={
+            <Button type="submit" form="rule-edit-form" size="sm" disabled={saving}>
               {saving ? "Salvando..." : "Salvar regra"}
             </Button>
           }

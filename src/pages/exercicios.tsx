@@ -525,31 +525,34 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                 Fechar
               </Button>
             ) : (
-              <>
-                <Button type="button" variant="outline" disabled={saveState !== "idle"} onClick={closeModal}>
-                  Cancelar
-                </Button>
-                <Button
-                  type="submit"
-                  form="exercise-edit-form"
-                  disabled={saveState !== "idle"}
-                  className={saveState === "saved" ? "bg-green-600 hover:bg-green-600 text-white" : undefined}
-                >
-                  {saveState === "saving" ? (
-                    <>
-                      <Loader2 className="animate-spin" />
-                      Salvando...
-                    </>
-                  ) : saveState === "saved" ? (
-                    <>
-                      <Check />
-                      Salvo!
-                    </>
-                  ) : (
-                    "Salvar exercício"
-                  )}
-                </Button>
-              </>
+              <Button type="button" variant="outline" disabled={saveState !== "idle"} onClick={closeModal}>
+                Cancelar
+              </Button>
+            )
+          }
+          primaryAction={
+            !isReadOnly && (
+              <Button
+                type="submit"
+                form="exercise-edit-form"
+                size="sm"
+                disabled={saveState !== "idle"}
+                className={saveState === "saved" ? "bg-green-600 hover:bg-green-600 text-white" : undefined}
+              >
+                {saveState === "saving" ? (
+                  <>
+                    <Loader2 className="animate-spin" />
+                    Salvando...
+                  </>
+                ) : saveState === "saved" ? (
+                  <>
+                    <Check />
+                    Salvo!
+                  </>
+                ) : (
+                  "Salvar exercício"
+                )}
+              </Button>
             )
           }
         >
