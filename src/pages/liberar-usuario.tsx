@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import { Check, Copy, KeyRound, Loader2, SearchX, ShieldCheck, UserPlus } from "lucide-react"
 
@@ -87,6 +87,15 @@ export function LiberarUsuarioPage({ canEdit: canEditProp }: LiberarUsuarioPageP
 
   const [pendingRenewal, setPendingRenewal] = useState<{ userId: string; tier: Tier } | null>(null)
   const [renewState, setRenewState] = useState<SaveState>("idle")
+
+  useEffect(() => {
+    if (createState !== "done") return
+    const timer = setTimeout(() => {
+      setCreateState("idle")
+      setCreatedUser(null)
+    }, 3000)
+    return () => clearTimeout(timer)
+  }, [createState])
 
   const [searchEmail, setSearchEmail] = useState("")
   const [searchState, setSearchState] = useState<SearchState>("idle")
