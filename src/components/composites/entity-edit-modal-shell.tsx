@@ -31,7 +31,24 @@ export function EntityEditModalShell({
   className,
 }: EntityEditModalShellProps) {
   return (
-    <DialogPrimitive.Root open onOpenChange={(open) => !open && onClose()}>
+    <DialogPrimitive.Root
+      open
+      onOpenChange={(open, eventDetails) => {
+        if (open) return
+        if (eventDetails.reason === "outside-press") {
+          const target = eventDetails.event.target
+          // Selects/popovers do Radix (ex: atoms/select.tsx) portalizam seu
+          // conteúdo em document.body, fora da subárvore do Popup do Base UI.
+          // O Base UI lê cliques nesse conteúdo como "fora" do modal e o
+          // fecharia — cancelamos nesse caso específico.
+          if (target instanceof Element && target.closest("[data-radix-popper-content-wrapper]")) {
+            eventDetails.cancel()
+            return
+          }
+        }
+        onClose()
+      }}
+    >
       <DialogPrimitive.Portal>
         <DialogPrimitive.Backdrop className="fixed inset-0 z-50 bg-black/40 transition-opacity duration-150 data-ending-style:opacity-0 data-starting-style:opacity-0" />
         <DialogPrimitive.Popup className="fixed inset-0 z-50 flex items-center justify-center p-4 transition duration-150 data-ending-style:scale-95 data-ending-style:opacity-0 data-starting-style:scale-95 data-starting-style:opacity-0">
