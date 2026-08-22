@@ -9,6 +9,7 @@ import {
   Dumbbell,
   Eye,
   EyeOff,
+  FileStack,
   KeyRound,
   Loader2,
   Mail,
@@ -23,11 +24,13 @@ import { Badge } from "@/components/atoms/badge"
 import { Button } from "@/components/atoms/button"
 import { EmptyState } from "@/components/atoms/empty-state"
 import { Input } from "@/components/atoms/input"
+import { Skeleton } from "@/components/atoms/skeleton"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/atoms/tabs"
 import { ToggleButtonGroup, type ToggleButtonGroupOption } from "@/components/atoms/toggle-button-group"
 import { EntityCard } from "@/components/composites/entity-card"
 import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
-import { adminMutation } from "@/lib/admin-api"
+import { ProtocolTemplatePicker, type ProtocolEditorTemplateOption } from "@/components/composites/protocol-editor"
+import { adminMutation, adminRpc } from "@/lib/admin-api"
 import { cn } from "@/lib/utils"
 
 type AdminTemporaryPasswordResponse =
@@ -227,6 +230,56 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
     await navigator.clipboard.writeText(temporaryPassword)
   }
 
+  // Problema 01 (dev-acjustment): a mesma migração de protocolo disponível
+  // na aba Protocolos > Treinos individuais também precisa funcionar por
+  // aqui — carrega templates + protocolo atual sob demanda na primeira
+  // vez que a aba "Protocolo" é aberta, mesmo padrão de
+  // openTreinoIndividualModal em src/pages/protocolos.tsx.
+  const [protocolTemplates, setProtocolTemplates] = React.useState<ProtocolEditorTemplateOption[] | null>(null)
+  const [currentProtocolNome, setCurrentProtocolNome] = React.useState<string | null>(null)
+  const [protocolLoadError, setProtocolLoadError] = React.useState<string | null>(null)
+  const [protocolAssignState, setProtocolAssignState] = React.useState<"idle" | "saving" | "saved">("idle")
+  const [protocolAssignError, setProtocolAssignError] = React.useState<string | null>(null)
+
+  async function loadProtocolTab() {
+    if (protocolTemplates !== null || !canEdit) return
+    setProtocolLoadError(null)
+    try {
+      const [templateRows, detailRows] = await Promise.all([
+        adminRpc<{ template_id: string; nome: string; nivel: string; objetivo: string; categoria: string | null; status: string }[]>(
+          "admin_protocol_templates_tree",
+          { p_status: "ativo", p_nivel: null, p_objetivo: null }
+        ),
+        adminRpc<{ program_nome: string | null }[]>("admin_user_program_detail", { p_user_id: user.id }),
+      ])
+      setProtocolTemplates(
+        templateRows.map((row) => ({
+          id: row.template_id,
+          nome: row.nome,
+          nivel: row.nivel,
+          objetivo: row.objetivo,
+          categoria: row.categoria,
+        }))
+      )
+      setCurrentProtocolNome(detailRows[0]?.program_nome ?? null)
+    } catch (loadError) {
+      setProtocolLoadError(errorMessage(loadError))
+    }
+  }
+
+  async function handleAssignProtocolTemplate(templateId: string) {
+    if (protocolAssignState !== "idle") return
+    setProtocolAssignState("saving")
+    setProtocolAssignError(null)
+    try {
+      await adminMutation(`/admin/users/${user.id}/program/assign`, { method: "POST", body: { templateId } })
+      setProtocolAssignState("saved")
+    } catch (assignError) {
+      setProtocolAssignError(errorMessage(assignError))
+      setProtocolAssignState("idle")
+    }
+  }
+
   return (
     <EntityEditModalShell
       title={user.name}
@@ -245,7 +298,12 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
         </Badge>
       )}
 
-      <Tabs defaultValue="dados">
+      <Tabs
+        defaultValue="dados"
+        onValueChange={(value) => {
+          if (value === "protocolo") void loadProtocolTab()
+        }}
+      >
         <TabsList>
           <TabsTrigger value="dados" className="gap-1.5">
             <ClipboardList className="size-4" />
@@ -259,6 +317,12 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
             <NotebookPen className="size-4" />
             Respostas do Quiz
           </TabsTrigger>
+          {canEdit && (
+            <TabsTrigger value="protocolo" className="gap-1.5">
+              <FileStack className="size-4" />
+              Protocolo
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="dados" className="space-y-4">
@@ -517,6 +581,33 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
             </div>
           </div>
         </TabsContent>
+
+        {canEdit && (
+          <TabsContent value="protocolo" className="space-y-4">
+            {protocolLoadError ? (
+              <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                {protocolLoadError}
+              </p>
+            ) : protocolTemplates === null ? (
+              <div className="space-y-2">
+                <Skeleton className="h-10 w-full" />
+                <Skeleton className="h-24 w-full" />
+              </div>
+            ) : protocolAssignState === "saved" ? (
+              <div className="rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-500">
+                Protocolo alterado! O aluno vai ver o novo protocolo como "novo protocolo" até abrir pela primeira vez.
+              </div>
+            ) : (
+              <ProtocolTemplatePicker
+                templates={protocolTemplates}
+                currentTemplateNome={currentProtocolNome}
+                saving={protocolAssignState === "saving"}
+                error={protocolAssignError}
+                onSelect={(templateId) => void handleAssignProtocolTemplate(templateId)}
+              />
+            )}
+          </TabsContent>
+        )}
       </Tabs>
     </EntityEditModalShell>
   )

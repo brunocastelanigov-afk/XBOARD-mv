@@ -2,13 +2,10 @@ import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
 import {
   ArrowLeft,
-  Check,
-  ClipboardList,
   Eye,
   FileQuestion,
   Loader2,
   MessageSquareText,
-  RefreshCw,
   Users,
 } from "lucide-react"
 
@@ -33,10 +30,9 @@ import { EntityCard } from "@/components/composites/entity-card"
 import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
 import { StatTile } from "@/components/composites/stat-tile"
-import { adminMutation, adminRpc } from "@/lib/admin-crm-api"
+import { adminRpc } from "@/lib/admin-crm-api"
 
-type RespostasSubTab = "por-usuario" | "por-pergunta" | "sugestoes"
-type SuggestionStatus = "nova" | "revisada" | "implementada"
+type RespostasSubTab = "por-usuario" | "por-pergunta"
 
 const ALL = "__all__"
 const chartColors = ["#3b82f6", "#22c55e", "#a855f7", "#f59e0b", "#ef4444", "#14b8a6", "#64748b"]
@@ -84,41 +80,9 @@ interface AdminQuizAnalyticsSummaryRow {
   rollup_status: string | null
 }
 
-interface AdminSuggestionRow {
-  suggestion_id: string
-  user_id: string
-  user_name: string
-  user_email: string
-  texto: string
-  status: SuggestionStatus
-  created_at: string
-  cursor_created_at: string
-  cursor_suggestion_id: string
-}
-
-interface AdminSuggestionStatusUpdateResponse {
-  status: "ok"
-  mutationId: string
-  idempotencyKey: string
-  affectedIds: string[]
-  suggestionStatus: SuggestionStatus
-}
-
 interface QuizAnswer {
   pergunta: string
   resposta: string
-}
-
-const statusLabel: Record<SuggestionStatus, string> = {
-  nova: "Nova",
-  revisada: "Revisada",
-  implementada: "Implementada",
-}
-
-const statusClassName: Record<SuggestionStatus, string> = {
-  nova: "border-blue-500/30 bg-blue-500/10 text-blue-600",
-  revisada: "border-amber-500/30 bg-amber-500/10 text-amber-600",
-  implementada: "border-emerald-500/30 bg-emerald-500/10 text-emerald-600",
 }
 
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -239,25 +203,22 @@ function ListSkeleton({ rows = 4 }: { rows?: number }) {
 
 function SummaryTiles({
   summary,
-  suggestionsCount,
   loading,
 }: {
   summary: AdminQuizAnalyticsSummaryRow | null
-  suggestionsCount: number
   loading: boolean
 }) {
-  if (loading) return <StatGridSkeleton columns={4} />
+  if (loading) return <StatGridSkeleton columns={3} />
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <StatTile label="Respostas" value={summary?.total_responses ?? 0} icon={MessageSquareText} tone="blue" />
       <StatTile label="Respondentes" value={summary?.unique_respondents ?? 0} icon={Users} tone="green" />
-      <StatTile label="Perguntas rastreadas" value={summary?.distinct_questions_tracked ?? 0} icon={FileQuestion} tone="purple" />
       <StatTile
-        label="Sugestões"
-        value={suggestionsCount}
-        icon={ClipboardList}
-        tone="amber"
+        label="Perguntas rastreadas"
+        value={summary?.distinct_questions_tracked ?? 0}
+        icon={FileQuestion}
+        tone="purple"
         description={summary?.rollup_watermark ? `Rollup: ${formatDateTime(summary.rollup_watermark)}` : summary?.rollup_status ?? undefined}
       />
     </div>
@@ -547,140 +508,6 @@ function PorPerguntaView({
   )
 }
 
-function SugestoesView({
-  canEdit,
-  loading,
-  suggestions,
-  onSuggestionStatusChange,
-}: {
-  canEdit: boolean
-  loading: boolean
-  suggestions: AdminSuggestionRow[]
-  onSuggestionStatusChange: (suggestionId: string, status: SuggestionStatus) => void
-}) {
-  const [search, setSearch] = useState("")
-  const [status, setStatus] = useState<SuggestionStatus | typeof ALL>(ALL)
-  const [savingId, setSavingId] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  const filtered = useMemo(() => {
-    const term = search.trim().toLowerCase()
-    return suggestions.filter((suggestion) => {
-      if (
-        term &&
-        !suggestion.user_name.toLowerCase().includes(term) &&
-        !suggestion.user_email.toLowerCase().includes(term) &&
-        !suggestion.texto.toLowerCase().includes(term)
-      ) {
-        return false
-      }
-      if (status !== ALL && suggestion.status !== status) return false
-      return true
-    })
-  }, [suggestions, search, status])
-
-  async function updateStatus(suggestion: AdminSuggestionRow, nextStatus: SuggestionStatus) {
-    if (savingId) return
-    setSavingId(suggestion.suggestion_id)
-    setError(null)
-
-    try {
-      const response = await adminMutation<AdminSuggestionStatusUpdateResponse>(
-        `/admin/suggestions/${suggestion.suggestion_id}/status`,
-        { method: "PATCH", body: { status: nextStatus } }
-      )
-      onSuggestionStatusChange(suggestion.suggestion_id, response.suggestionStatus)
-    } catch (mutationError) {
-      setError(errorMessage(mutationError, "Erro ao classificar sugestão."))
-    } finally {
-      setSavingId(null)
-    }
-  }
-
-  return (
-    <div className="flex flex-col gap-4">
-      <div className="sticky top-0 z-10 flex flex-col gap-3 rounded-lg border border-border bg-card p-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <SearchInput
-            placeholder="Buscar sugestão..."
-            value={search}
-            onChange={setSearch}
-            className="w-full lg:w-[300px]"
-          />
-          <Select value={status} onValueChange={(value) => setStatus(value as SuggestionStatus | typeof ALL)}>
-            <SelectTrigger className="w-full lg:w-[180px]">
-              <SelectValue placeholder="Status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value={ALL}>Todos os status</SelectItem>
-              <SelectItem value="nova">Nova</SelectItem>
-              <SelectItem value="revisada">Revisada</SelectItem>
-              <SelectItem value="implementada">Implementada</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <span className="text-sm text-muted-foreground">
-          Mostrando {filtered.length} de {suggestions.length}
-        </span>
-      </div>
-
-      {error && (
-        <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {error}
-        </p>
-      )}
-
-      {loading ? (
-        <ListSkeleton rows={4} />
-      ) : filtered.length === 0 ? (
-        <EmptyState icon={MessageSquareText} message="Nenhuma sugestão encontrada." />
-      ) : (
-        <div className="flex flex-col gap-3">
-          {filtered.map((suggestion) => (
-            <EntityCard
-              key={suggestion.suggestion_id}
-              title={suggestion.user_name}
-              metadata={[suggestion.user_email, formatDateTime(suggestion.created_at)]}
-              badges={[
-                {
-                  label: statusLabel[suggestion.status],
-                  variant: "outline",
-                  className: statusClassName[suggestion.status],
-                },
-              ]}
-            >
-              <div className="space-y-3">
-                <p className="text-sm text-muted-foreground">{suggestion.texto}</p>
-                {canEdit && (
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    {(["nova", "revisada", "implementada"] as SuggestionStatus[]).map((option) => (
-                      <Button
-                        key={option}
-                        type="button"
-                        size="sm"
-                        variant={suggestion.status === option ? "default" : "outline"}
-                        disabled={savingId === suggestion.suggestion_id || suggestion.status === option}
-                        onClick={() => updateStatus(suggestion, option)}
-                      >
-                        {savingId === suggestion.suggestion_id ? (
-                          <Loader2 className="size-3.5 animate-spin" />
-                        ) : suggestion.status === option ? (
-                          <Check className="size-3.5" />
-                        ) : null}
-                        {statusLabel[option]}
-                      </Button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </EntityCard>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
 interface AvaliacaoPageProps {
   canEdit?: boolean
 }
@@ -697,29 +524,25 @@ export function AvaliacaoPage({ canEdit: canEditProp }: AvaliacaoPageProps) {
   const [responses, setResponses] = useState<AdminQuizResponseRow[]>([])
   const [questionStats, setQuestionStats] = useState<AdminQuizQuestionStatsRow[]>([])
   const [summary, setSummary] = useState<AdminQuizAnalyticsSummaryRow | null>(null)
-  const [suggestions, setSuggestions] = useState<AdminSuggestionRow[]>([])
 
   async function loadAvaliacao() {
     setLoading(true)
     setError(null)
 
     try {
-      const [responseRows, statsRows, summaryRows, suggestionRows] = await Promise.all([
+      const [responseRows, statsRows, summaryRows] = await Promise.all([
         adminRpc<AdminQuizResponseRow[]>("admin_quiz_responses_by_user", { p_limit: 100 }),
         adminRpc<AdminQuizQuestionStatsRow[]>("admin_quiz_question_stats", { p_limit: 1000 }),
         adminRpc<AdminQuizAnalyticsSummaryRow[]>("admin_quiz_analytics_summary"),
-        adminRpc<AdminSuggestionRow[]>("admin_suggestions_list", { p_limit: 100 }),
       ])
 
       setResponses(responseRows)
       setQuestionStats(statsRows)
       setSummary(summaryRows[0] ?? null)
-      setSuggestions(suggestionRows)
     } catch (loadError) {
       setResponses([])
       setQuestionStats([])
       setSummary(null)
-      setSuggestions([])
       setError(errorMessage(loadError, "Erro ao carregar avaliação."))
     } finally {
       setLoading(false)
@@ -734,15 +557,6 @@ export function AvaliacaoPage({ canEdit: canEditProp }: AvaliacaoPageProps) {
   const isLoading = forceLoading || loading
   const visibleResponses = forceEmpty ? [] : responses
   const visibleStats = forceEmpty ? [] : questionStats
-  const visibleSuggestions = forceEmpty ? [] : suggestions
-
-  function handleSuggestionStatusChange(suggestionId: string, status: SuggestionStatus) {
-    setSuggestions((current) =>
-      current.map((suggestion) =>
-        suggestion.suggestion_id === suggestionId ? { ...suggestion, status } : suggestion
-      )
-    )
-  }
 
   return (
     <div className="flex h-full flex-col animate-in fade-in duration-500">
@@ -755,7 +569,7 @@ export function AvaliacaoPage({ canEdit: canEditProp }: AvaliacaoPageProps) {
           </p>
         )}
 
-        <SummaryTiles summary={summary} suggestionsCount={visibleSuggestions.length} loading={isLoading} />
+        <SummaryTiles summary={summary} loading={isLoading} />
 
         <Tabs value={subTab} onValueChange={(value) => setSubTab(value as RespostasSubTab)}>
           <TabsList className="sticky top-0 z-20">
@@ -767,24 +581,12 @@ export function AvaliacaoPage({ canEdit: canEditProp }: AvaliacaoPageProps) {
               <FileQuestion className="size-4" />
               Por Pergunta
             </TabsTrigger>
-            <TabsTrigger value="sugestoes" className="gap-1.5">
-              <RefreshCw className="size-4" />
-              Sugestões
-            </TabsTrigger>
           </TabsList>
           <TabsContent value="por-usuario" className="mt-4">
             <PorUsuarioView canEdit={canEdit} loading={isLoading} responses={visibleResponses} />
           </TabsContent>
           <TabsContent value="por-pergunta" className="mt-4">
             <PorPerguntaView loading={isLoading} stats={visibleStats} />
-          </TabsContent>
-          <TabsContent value="sugestoes" className="mt-4">
-            <SugestoesView
-              canEdit={canEdit}
-              loading={isLoading}
-              suggestions={visibleSuggestions}
-              onSuggestionStatusChange={handleSuggestionStatusChange}
-            />
           </TabsContent>
         </Tabs>
       </div>

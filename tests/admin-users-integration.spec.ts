@@ -76,6 +76,22 @@ async function mockUsuariosRpcs(page: import("@playwright/test").Page) {
       body: JSON.stringify([{ reassessment_days: 45 }]),
     })
   )
+  await page.route("**/rest/v1/rpc/admin_users_stats*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        { total: 1, trinca: 1, elite: 0, reembolso: 0, sem_acesso: 0, vencendo: 0 },
+      ]),
+    })
+  )
+  await page.route("**/rest/v1/rpc/admin_users_filter_options*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([{ objetivos: ["Crescer", "Secar"], sexos: ["Homem", "Mulher"] }]),
+    })
+  )
   await page.route("**/rest/v1/rpc/admin_user_detail*", (route) =>
     route.fulfill({
       status: 200,
@@ -134,6 +150,75 @@ test.describe("Story 15.5 — Usuarios e Liberar Usuario reais", () => {
 
     expect(reassessmentHeaders?.authorization).toBe("Bearer test-crm-access-token")
     expect(reassessmentHeaders?.["idempotency-key"]).toBeTruthy()
+  })
+
+  test("Usuarios — filtros de Objetivo/Sexo usam admin_users_filter_options (MV), nao so a pagina carregada", async ({
+    page,
+  }) => {
+    await mockCrmSession(page)
+    await mockUsuariosRpcs(page)
+
+    await page.goto("/crm/usuarios")
+    await expect(page.getByText("Aluno Real")).toBeVisible()
+
+    // "Secar" nao existe em nenhum lead da pagina carregada (só "Crescer"),
+    // mas a RPC admin_users_filter_options mockada devolve ["Crescer",
+    // "Secar"] -- prova que a lista de opções não é mais derivada de
+    // leads carregados, e sim da MV via RPC dedicada.
+    await page.getByRole("combobox", { name: /objetivo/i }).click()
+    await expect(page.getByRole("option", { name: "Secar" })).toBeVisible()
+  })
+
+  test("Usuarios — aba Protocolo do modal de usuário migra o aluno pra outro template", async ({ page }) => {
+    await mockCrmSession(page)
+    await mockUsuariosRpcs(page)
+
+    await page.route("**/rest/v1/rpc/admin_protocol_templates_tree*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            template_id: "template-1",
+            nome: "Treino Iniciante - Crescer",
+            nivel: "iniciante",
+            objetivo: "ganhar_musculo",
+            categoria: "A",
+            status: "ativo",
+          },
+        ]),
+      })
+    )
+    await page.route("**/rest/v1/rpc/admin_user_program_detail*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([{ program_nome: "Programa atual" }]),
+      })
+    )
+
+    let assignCalled = false
+    let assignBody: { templateId?: string } | null = null
+    await page.route(
+      "**/admin/users/11111111-1111-4111-8111-111111111111/program/assign",
+      (route) => {
+        if (route.request().method() !== "POST") return route.fallback()
+        assignCalled = true
+        assignBody = route.request().postDataJSON() as { templateId?: string }
+        return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ok: true }) })
+      }
+    )
+
+    await page.goto("/crm/usuarios")
+    await expect(page.getByText("Aluno Real")).toBeVisible()
+    await page.getByRole("button", { name: "Ver lead" }).click()
+
+    await page.getByRole("tab", { name: "Protocolo" }).click()
+    await expect(page.getByText("Protocolo atual: Programa atual")).toBeVisible()
+    await page.getByText("Treino Iniciante - Crescer").click()
+
+    await expect.poll(() => assignCalled).toBe(true)
+    expect(assignBody).toEqual({ templateId: "template-1" })
   })
 
   test("Liberar Usuario busca, cria, libera e gera senha temporaria via contratos reais", async ({ page }) => {

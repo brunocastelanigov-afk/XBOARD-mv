@@ -144,6 +144,15 @@ async function mockCommonAdminReads(page: Page) {
       ]),
     })
   )
+  await page.route("**/rest/v1/rpc/admin_user_programs_stats*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        { no_app: 0, com_protocolo: 1, aguardando_liberacao: 0, gerando: 0, sem_protocolo: 0 },
+      ]),
+    })
+  )
   await page.route("**/rest/v1/rpc/admin_user_program_detail*", (route) =>
     route.fulfill({
       status: 200,
@@ -236,33 +245,6 @@ test.describe("Story 15.6 — integrações reais Admin CRM", () => {
     await mockExerciseReads(page)
   })
 
-  test("Banners usa admin_banners_list e trata 409 real do /admin/banners", async ({ page }) => {
-    let createCalled = false
-    await page.route("**/admin/banners", (route) => {
-      if (route.request().method() !== "POST") return route.fallback()
-      createCalled = true
-      return route.fulfill({
-        status: 409,
-        contentType: "application/json",
-        body: JSON.stringify({
-          code: "conflict",
-          message: "Another active banner already uses this plano+ordem",
-        }),
-      })
-    })
-
-    await page.goto("/crm/banners")
-    await expect(page.getByText("Banner Elite #1")).toBeVisible()
-
-    await page.getByRole("button", { name: "Adicionar" }).click()
-    await page.getByPlaceholder("URL da imagem").fill("https://cdn.example.com/novo.jpg")
-    await page.getByPlaceholder("Link ao clicar").fill("/novo")
-    await page.getByRole("button", { name: "Salvar banner" }).click()
-
-    await expect(page.getByText("Conflito real do backend")).toBeVisible()
-    expect(createCalled).toBe(true)
-  })
-
   test("Regras carrega contratos read-only e testador chama endpoint real", async ({ page }) => {
     let testCalled = false
     await page.route("**/admin/classification-rules/test", async (route) => {
@@ -319,9 +301,56 @@ test.describe("Story 15.6 — integrações reais Admin CRM", () => {
 
     await page.getByRole("tab", { name: /Treinos individuais/ }).click()
     await expect(page.getByText("Aluno Real")).toBeVisible()
+    // Problema 02: o botão agora abre um card de escolha (protocolo vs.
+    // treino) em vez de ir direto pra lista de exercícios.
+    await page.getByRole("button", { name: "Editar protocolo / treino" }).click()
     await page.getByRole("button", { name: "Editar treino" }).click()
     await page.getByRole("button", { name: "Salvar treino" }).click()
     await expect.poll(() => programPatchCalled).toBe(true)
+  })
+
+  test("Problema 01 — Editar protocolo migra o aluno pra outro template via POST /program/assign", async ({
+    page,
+  }) => {
+    let assignCalled = false
+    let assignBody: { templateId?: string } | null = null
+
+    await page.route(
+      "**/admin/users/11111111-1111-1111-1111-111111111111/program/assign",
+      (route) => {
+        if (route.request().method() !== "POST") return route.fallback()
+        assignCalled = true
+        assignBody = route.request().postDataJSON() as { templateId?: string }
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            userId: "11111111-1111-1111-1111-111111111111",
+            hasProgram: true,
+            program: {
+              programId: "program-2",
+              nome: "Treino Iniciante - Crescer",
+              foco: null,
+              statusGeracao: "pronto",
+              createdAt: "2026-08-22T00:00:00.000Z",
+              days: [],
+            },
+          }),
+        })
+      }
+    )
+
+    await page.goto("/crm/protocolos")
+    await page.getByRole("tab", { name: /Treinos individuais/ }).click()
+    await expect(page.getByText("Aluno Real")).toBeVisible()
+
+    await page.getByRole("button", { name: "Editar protocolo / treino" }).click()
+    await page.getByRole("button", { name: "Editar protocolo" }).click()
+    await expect(page.getByText("Protocolo atual: Programa atual")).toBeVisible()
+    await page.getByText("Treino Iniciante - Crescer").click()
+
+    await expect.poll(() => assignCalled).toBe(true)
+    expect(assignBody).toEqual({ templateId: "template-1" })
   })
 
   test("Exercicios usa admin_exercises_list e mutacoes reais com Idempotency-Key", async ({ page }) => {

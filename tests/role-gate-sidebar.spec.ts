@@ -14,7 +14,7 @@ const CRM_ITEMS = [
   "Protocolos",
   "Exercícios",
   "Avaliação",
-  "Banners",
+  "Sugestões",
   "Regras",
   "Liberar usuário",
   "Configurações",

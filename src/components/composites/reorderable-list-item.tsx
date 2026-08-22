@@ -1,10 +1,15 @@
 import { ChevronDown, GripVertical, Trash2 } from "lucide-react"
+import { useSortable } from "@dnd-kit/react/sortable"
 
 import { Card } from "@/components/atoms/card"
 import { Button } from "@/components/atoms/button"
 import { cn } from "@/lib/utils"
 
 export interface ReorderableListItemProps {
+  /** Stable unique id for drag-and-drop identity. Falls back to `title` when omitted (non-draggable items). */
+  id?: string
+  /** Current position within its list, required for drag-and-drop reordering. Falls back to `order`. */
+  index?: number
   order: number
   title: string
   metadata?: string[]
@@ -15,6 +20,8 @@ export interface ReorderableListItemProps {
 }
 
 export function ReorderableListItem({
+  id,
+  index,
   order,
   title,
   metadata,
@@ -23,9 +30,27 @@ export function ReorderableListItem({
   draggable,
   className,
 }: ReorderableListItemProps) {
+  const { ref, handleRef, isDragging } = useSortable({
+    id: id ?? title,
+    index: index ?? order,
+    disabled: !draggable,
+  })
+
   return (
-    <Card className={cn("flex-row items-center gap-3 p-3", className)}>
-      {draggable && <GripVertical className="size-4 shrink-0 text-muted-foreground" />}
+    <Card
+      ref={draggable ? ref : undefined}
+      className={cn("flex-row items-center gap-3 p-3", isDragging && "opacity-50", className)}
+    >
+      {draggable && (
+        <button
+          type="button"
+          ref={handleRef}
+          className="cursor-grab touch-none text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          aria-label="Arrastar para reordenar"
+        >
+          <GripVertical className="size-4 shrink-0" />
+        </button>
+      )}
       <div className="flex size-6 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-medium text-primary-foreground">
         {order}
       </div>

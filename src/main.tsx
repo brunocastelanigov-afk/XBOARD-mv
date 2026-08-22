@@ -18,11 +18,11 @@ import { LeadDetailPage } from './pages/lead-detail'
 import { UsuariosPage } from './pages/usuarios'
 import { ExerciciosPage } from './pages/exercicios'
 import { ProtocolosPage } from './pages/protocolos'
-import { BannersPage } from './pages/banners'
 import { RegrasPage } from './pages/regras'
 import { LiberarUsuarioPage } from './pages/liberar-usuario'
 import { ConfiguracoesPage } from './pages/configuracoes'
 import { AvaliacaoPage } from './pages/avaliacao'
+import { SugestoesPage } from './pages/sugestoes'
 import { LoginPage } from './pages/login'
 import { ForgotPasswordPage } from './pages/forgot-password'
 import { ResetPasswordPage } from './pages/reset-password'
@@ -87,6 +87,10 @@ const router = createBrowserRouter([
             element: <AvaliacaoPage />
           },
           {
+            path: 'crm/sugestoes',
+            element: <SugestoesPage />
+          },
+          {
             path: 'crm/conquistas',
             element: <Navigate to="/crm/usuarios" replace />
           },
@@ -97,10 +101,6 @@ const router = createBrowserRouter([
           {
             path: 'crm/protocolos',
             element: <ProtocolosPage />
-          },
-          {
-            path: 'crm/banners',
-            element: <BannersPage />
           },
           {
             path: 'crm/regras',

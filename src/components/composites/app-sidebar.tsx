@@ -1,4 +1,4 @@
-import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, ImageIcon, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, Users, GraduationCap } from "lucide-react"
+import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, Users, GraduationCap, MessageSquareText } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -73,9 +73,9 @@ const items = [
     group: "crm" as const,
   },
   {
-    title: "Banners",
-    url: "/crm/banners",
-    icon: ImageIcon,
+    title: "Sugestões",
+    url: "/crm/sugestoes",
+    icon: MessageSquareText,
     group: "crm" as const,
   },
   {

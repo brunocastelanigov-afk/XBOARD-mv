@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useState } from "react"
 import { useSearchParams } from "react-router-dom"
+import { DragDropProvider } from "@dnd-kit/react"
+import { isSortable } from "@dnd-kit/react/sortable"
+import { arrayMove } from "@dnd-kit/helpers"
 import {
   Check,
   CheckCircle2,
@@ -37,6 +40,7 @@ import { EntityCard } from "@/components/composites/entity-card"
 import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
 import { LinkedEntitySearchList, type LinkedEntitySearchItem } from "@/components/composites/linked-entity-search-list"
+import { ProtocolEditorChoiceCards, ProtocolTemplatePicker } from "@/components/composites/protocol-editor"
 import { ReorderableListItem } from "@/components/composites/reorderable-list-item"
 import { StatTile } from "@/components/composites/stat-tile"
 import { WizardTabs } from "@/components/composites/wizard-tabs"
@@ -175,6 +179,8 @@ interface ProtocolForm {
     descricao: string
     duracaoMinutos: number | null
     exercicios: {
+      /** Stable client-side identity for drag reordering — survives edits/reorders, unrelated to `ordem`. */
+      key: string
       ordem: number
       exerciseId: string
       nome: string
@@ -194,6 +200,8 @@ interface ProgramForm {
     foco: string
     imagemUrl: string
     exercicios: {
+      /** Stable client-side identity for drag reordering — survives edits/reorders, unrelated to `ordem`. */
+      key: string
       ordem: number
       exerciseId: string
       nome: string
@@ -283,6 +291,7 @@ function toProtocolForm(template: TemplateRow | null, defaultCategoria: string):
       descricao: day.descricao ?? "",
       duracaoMinutos: day.duracao_minutos,
       exercicios: day.exercises.map((exercise) => ({
+        key: crypto.randomUUID(),
         ordem: exercise.ordem,
         exerciseId: exercise.exercise_id,
         nome: exercise.nome,
@@ -414,7 +423,10 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   const [releasingUserId, setReleasingUserId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
   const [deletingTemplate, setDeletingTemplate] = useState<TemplateRow | null>(null)
-  const [modalMode, setModalMode] = useState<"create" | "edit" | "program" | null>(null)
+  const [modalMode, setModalMode] = useState<"create" | "edit" | "program" | "choice" | "assign" | null>(null)
+  const [choiceStudent, setChoiceStudent] = useState<UserProgramRow | null>(null)
+  const [assignSaveState, setAssignSaveState] = useState<"idle" | "saving" | "saved">("idle")
+  const [assignError, setAssignError] = useState<string | null>(null)
   const [protocolFormState, setProtocolFormState] = useState<ProtocolForm | null>(null)
   const [programFormState, setProgramFormState] = useState<ProgramForm | null>(null)
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle")
@@ -659,6 +671,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
               const ordem = exercise.ordem ?? index + 1
               const joined = joinedByOrdem.get(ordem)
               return {
+                key: crypto.randomUUID(),
                 ordem,
                 exerciseId: joined?.exercise_id ?? exercise.exercise_id ?? "",
                 nome: exercise.nome,
@@ -678,6 +691,47 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     }
   }
 
+  // Problema 02: o card inicial pra gerenciar o protocolo/treino de um
+  // aluno sempre pergunta primeiro "Editar protocolo" (troca o template)
+  // ou "Editar treino" (edita os exercícios do protocolo atual) — a lista
+  // de exercícios só aparece se "Editar treino" for escolhido.
+  function openChoiceModal(student: UserProgramRow) {
+    setChoiceStudent(student)
+    setModalError(null)
+    setAssignError(null)
+    setAssignSaveState("idle")
+    setModalMode("choice")
+  }
+
+  function openAssignModal() {
+    setModalError(null)
+    setAssignError(null)
+    setAssignSaveState("idle")
+    setModalMode("assign")
+  }
+
+  // Problema 01: migração manual de protocolo — troca qual template o
+  // aluno está seguindo via POST /admin/users/:userId/program/assign. O
+  // backend sempre insere um programa NOVO (nunca edita o anterior), ver
+  // worker services/program-generation.ts assignTemplate().
+  async function handleAssignTemplate(templateId: string) {
+    if (!choiceStudent || assignSaveState !== "idle") return
+    setAssignSaveState("saving")
+    setAssignError(null)
+    try {
+      await adminMutation(`/admin/users/${choiceStudent.user_id}/program/assign`, {
+        method: "POST",
+        body: { templateId },
+      })
+      await loadStudents()
+      setAssignSaveState("saved")
+      window.setTimeout(closeModal, 700)
+    } catch (assignMutationError) {
+      setAssignError(errorMessage(assignMutationError))
+      setAssignSaveState("idle")
+    }
+  }
+
   function closeModal() {
     setModalMode(null)
     setProtocolFormState(null)
@@ -688,6 +742,9 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setExpandedProgramExerciseKey(null)
     setModalStep("1. Dados do protocolo")
     setExercisePickerQuery("")
+    setChoiceStudent(null)
+    setAssignSaveState("idle")
+    setAssignError(null)
   }
 
   function updateProtocolForm(patch: Partial<ProtocolForm>) {
@@ -761,6 +818,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                     exercicios: renumbered([
                       ...day.exercicios,
                       {
+                        key: crypto.randomUUID(),
                         ordem: day.exercicios.length + 1,
                         exerciseId: defaultExercise.id,
                         nome: defaultExercise.nome,
@@ -793,6 +851,22 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
             dias: current.dias.map((day, currentDayIndex) =>
               currentDayIndex === dayIndex
                 ? { ...day, exercicios: renumbered(day.exercicios.filter((_, index) => index !== exerciseIndex)) }
+                : day
+            ),
+          }
+        : current
+    )
+  }
+
+  function reorderProtocolExercises(dayIndex: number, fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return
+    setProtocolFormState((current) =>
+      current
+        ? {
+            ...current,
+            dias: current.dias.map((day, currentDayIndex) =>
+              currentDayIndex === dayIndex
+                ? { ...day, exercicios: renumbered(arrayMove(day.exercicios, fromIndex, toIndex)) }
                 : day
             ),
           }
@@ -848,6 +922,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                     exercicios: renumbered([
                       ...day.exercicios,
                       {
+                        key: crypto.randomUUID(),
                         ordem: day.exercicios.length + 1,
                         exerciseId: fallback.exercise_id,
                         nome: fallback.nome,
@@ -875,6 +950,22 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
             days: current.days.map((day, currentDayIndex) =>
               currentDayIndex === dayIndex
                 ? { ...day, exercicios: renumbered(day.exercicios.filter((_, index) => index !== exerciseIndex)) }
+                : day
+            ),
+          }
+        : current
+    )
+  }
+
+  function reorderProgramExercises(dayIndex: number, fromIndex: number, toIndex: number) {
+    if (fromIndex === toIndex) return
+    setProgramFormState((current) =>
+      current
+        ? {
+            ...current,
+            days: current.days.map((day, currentDayIndex) =>
+              currentDayIndex === dayIndex
+                ? { ...day, exercicios: renumbered(arrayMove(day.exercicios, fromIndex, toIndex)) }
                 : day
             ),
           }
@@ -1159,10 +1250,9 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                           <Button
                             type="button"
                             variant="outline"
-                            disabled={!aluno.has_program}
-                            onClick={() => void openTreinoIndividualModal(aluno)}
+                            onClick={() => openChoiceModal(aluno)}
                           >
-                            Editar treino
+                            Editar protocolo / treino
                           </Button>
                         </div>
                       </CardContent>
@@ -1442,9 +1532,16 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                             {day.exercicios.length === 0 ? (
                               <EmptyState message="Nenhum exercício adicionado a este treino ainda." />
                             ) : (
+                              <DragDropProvider
+                                onDragEnd={(event) => {
+                                  const { source } = event.operation
+                                  if (!isSortable(source)) return
+                                  reorderProtocolExercises(dayIndex, source.initialIndex, source.index)
+                                }}
+                              >
                               <div className="space-y-2">
                                 {day.exercicios.map((exercise, exerciseIndex) => {
-                                  const exerciseKey = `protocol-${dayIndex}-${exerciseIndex}`
+                                  const exerciseKey = exercise.key
                                   const exerciseExpanded = expandedProgramExerciseKey === exerciseKey
                                   const catalogEntry = exerciseCatalogFull.find(
                                     (option) => option.exercise_id === exercise.exerciseId
@@ -1452,6 +1549,8 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                   return (
                                     <div key={exerciseKey} className="space-y-2">
                                       <ReorderableListItem
+                                        id={exerciseKey}
+                                        index={exerciseIndex}
                                         order={exercise.ordem}
                                         title={exercise.nome}
                                         metadata={[
@@ -1561,6 +1660,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                   )
                                 })}
                               </div>
+                              </DragDropProvider>
                             )}
                           </div>
                         </CardContent>
@@ -1572,6 +1672,58 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
             </div>
             )}
           </div>
+        </EntityEditModalShell>
+      )}
+
+      {modalMode === "choice" && choiceStudent && (
+        <EntityEditModalShell
+          title="Editar protocolo / treino"
+          description={choiceStudent.nome_completo || choiceStudent.email}
+          onClose={closeModal}
+          footer={
+            <Button type="button" variant="outline" onClick={closeModal} className="w-full">
+              Cancelar
+            </Button>
+          }
+        >
+          <ProtocolEditorChoiceCards
+            canEditTreino={choiceStudent.has_program}
+            onChooseProtocolo={openAssignModal}
+            onChooseTreino={() => void openTreinoIndividualModal(choiceStudent)}
+          />
+        </EntityEditModalShell>
+      )}
+
+      {modalMode === "assign" && choiceStudent && (
+        <EntityEditModalShell
+          title="Editar protocolo"
+          description={choiceStudent.nome_completo || choiceStudent.email}
+          onClose={closeModal}
+          footer={
+            <Button
+              type="button"
+              variant="outline"
+              disabled={assignSaveState === "saving"}
+              onClick={closeModal}
+              className="w-full"
+            >
+              {assignSaveState === "saved" ? "Fechar" : "Cancelar"}
+            </Button>
+          }
+        >
+          <ProtocolTemplatePicker
+            templates={templates.map((template) => ({
+              id: template.template_id,
+              nome: template.nome,
+              nivel: template.nivel,
+              objetivo: template.objetivo,
+              categoria: template.categoria,
+            }))}
+            currentTemplateNome={choiceStudent.program_nome}
+            saving={assignSaveState !== "idle"}
+            error={assignError}
+            onSelect={(templateId) => void handleAssignTemplate(templateId)}
+          />
         </EntityEditModalShell>
       )}
 
@@ -1668,9 +1820,16 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                               {day.exercicios.length === 0 ? (
                                 <EmptyState message="Nenhum exercício adicionado a este treino ainda." />
                               ) : (
+                                <DragDropProvider
+                                  onDragEnd={(event) => {
+                                    const { source } = event.operation
+                                    if (!isSortable(source)) return
+                                    reorderProgramExercises(dayIndex, source.initialIndex, source.index)
+                                  }}
+                                >
                                 <div className="space-y-2">
                                   {day.exercicios.map((exercise, exerciseIndex) => {
-                                    const exerciseKey = `${dayIndex}-${exerciseIndex}`
+                                    const exerciseKey = exercise.key
                                     const exerciseExpanded = expandedProgramExerciseKey === exerciseKey
                                     const catalogEntry = exerciseCatalogFull.find(
                                       (option) => option.exercise_id === exercise.exerciseId
@@ -1682,6 +1841,8 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                     return (
                                       <div key={exerciseKey} className="space-y-2">
                                         <ReorderableListItem
+                                          id={exerciseKey}
+                                          index={exerciseIndex}
                                           order={exercise.ordem}
                                           title={exercise.nome}
                                           metadata={[
@@ -1827,6 +1988,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                                     )
                                   })}
                                 </div>
+                                </DragDropProvider>
                               )}
                             </div>
                         </CardContent>

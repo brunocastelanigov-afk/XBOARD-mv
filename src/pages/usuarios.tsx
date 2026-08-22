@@ -352,14 +352,28 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     }
   }
 
-  const objetivoOptions = useMemo(
-    () => Array.from(new Set(leads.map((lead) => lead.objetivo).filter(Boolean))).sort(),
-    [leads]
-  )
-  const sexoOptions = useMemo(
-    () => Array.from(new Set(leads.map((lead) => lead.sexo).filter(Boolean))).sort(),
-    [leads]
-  )
+  const [objetivoOptions, setObjetivoOptions] = useState<string[]>([])
+  const [sexoOptions, setSexoOptions] = useState<string[]>([])
+
+  useEffect(() => {
+    let active = true
+
+    adminRpc<{ objetivos: string[]; sexos: string[] }[]>("admin_users_filter_options")
+      .then((rows) => {
+        if (!active) return
+        const row = rows[0]
+        setObjetivoOptions(row?.objetivos ?? [])
+        setSexoOptions(row?.sexos ?? [])
+      })
+      .catch(() => {
+        // Filtro fica vazio (só "Todos") se a RPC falhar — não bloqueia a
+        // lista de leads, que já carrega separadamente.
+      })
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   const filteredLeads = useMemo(() => {
     const term = search.trim().toLowerCase()
