@@ -8,6 +8,13 @@ import { Input } from "@/components/atoms/input"
 import { SearchInput } from "@/components/atoms/search-input"
 import { Skeleton } from "@/components/atoms/skeleton"
 import { Textarea } from "@/components/atoms/textarea"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/atoms/select"
 import { CategoryPillFilter } from "@/components/composites/category-pill-filter"
 import { EntityCard } from "@/components/composites/entity-card"
 import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
@@ -18,6 +25,14 @@ import { cn } from "@/lib/utils"
 
 const ALL_CATEGORIES_LABEL = "Todos"
 const PAGE_SIZE = 100
+
+type SexoApi = "masculino" | "feminino"
+const SEXO_FILTER_ALL = "__ambos__" as const
+const SEXO_FILTER_OPTIONS: { value: SexoApi | typeof SEXO_FILTER_ALL; label: string }[] = [
+  { value: SEXO_FILTER_ALL, label: "Ambos" },
+  { value: "masculino", label: "Homem" },
+  { value: "feminino", label: "Mulher" },
+]
 
 const TONE_CLASSES = [
   { badge: "border-rose-500/30 bg-rose-500/10 text-rose-500", bar: "border-l-rose-500" },
@@ -41,6 +56,7 @@ interface AdminExerciseRow {
   video_url: string | null
   instrucao_texto: string | null
   is_active: boolean
+  sexo: SexoApi | null
   cursor_nome: string
   cursor_exercise_id: string
 }
@@ -54,6 +70,7 @@ interface AdminExerciseResponse {
   videoUrl: string | null
   instrucaoTexto: string | null
   isActive: boolean
+  sexo: SexoApi | null
 }
 
 interface AffectedTemplate {
@@ -77,6 +94,7 @@ interface Exercise {
   instructions: string
   videoUrl: string
   isActive: boolean
+  sexo: SexoApi | null
   cursorName: string
   cursorExerciseId: string
 }
@@ -87,6 +105,7 @@ interface ExerciseFormState {
   equipment: string
   instructions: string
   videoUrl: string
+  sexo: SexoApi | null
 }
 
 function rowToExercise(row: AdminExerciseRow): Exercise {
@@ -99,6 +118,7 @@ function rowToExercise(row: AdminExerciseRow): Exercise {
     instructions: row.instrucao_texto ?? "",
     videoUrl: row.video_url ?? "",
     isActive: row.is_active,
+    sexo: row.sexo,
     cursorName: row.cursor_nome,
     cursorExerciseId: row.cursor_exercise_id,
   }
@@ -114,6 +134,7 @@ function responseToExercise(row: AdminExerciseResponse): Exercise {
     instructions: row.instrucaoTexto ?? "",
     videoUrl: row.videoUrl ?? "",
     isActive: row.isActive,
+    sexo: row.sexo,
     cursorName: row.nome,
     cursorExerciseId: row.exerciseId,
   }
@@ -127,6 +148,7 @@ function toFormState(exercise: Exercise | null): ExerciseFormState {
       equipment: "",
       instructions: "",
       videoUrl: "",
+      sexo: null,
     }
   }
   return {
@@ -135,6 +157,7 @@ function toFormState(exercise: Exercise | null): ExerciseFormState {
     equipment: exercise.equipment,
     instructions: exercise.instructions,
     videoUrl: exercise.videoUrl,
+    sexo: exercise.sexo,
   }
 }
 
@@ -177,6 +200,7 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
   const [categories, setCategories] = useState<string[]>([])
   const [search, setSearch] = useState("")
   const [activeCategory, setActiveCategory] = useState(ALL_CATEGORIES_LABEL)
+  const [sexoFilter, setSexoFilter] = useState<SexoApi | typeof SEXO_FILTER_ALL>(SEXO_FILTER_ALL)
   const [hasMore, setHasMore] = useState(false)
   const [lastCursor, setLastCursor] = useState<{ nome: string; exerciseId: string } | null>(null)
   const [modalMode, setModalMode] = useState<ModalMode>(null)
@@ -221,6 +245,7 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
       const trimmedSearch = search.trim()
       if (trimmedSearch) params.p_search_name_prefix = trimmedSearch
       if (activeCategory !== ALL_CATEGORIES_LABEL) params.p_grupo_muscular = activeCategory
+      if (sexoFilter !== SEXO_FILTER_ALL) params.p_sexo = sexoFilter
       if (append && lastCursor) {
         params.p_after_nome = lastCursor.nome
         params.p_after_exercise_id = lastCursor.exerciseId
@@ -250,7 +275,7 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
       void loadExercises()
     }, 250)
     return () => window.clearTimeout(timeout)
-  }, [search, activeCategory])
+  }, [search, activeCategory, sexoFilter])
 
   const isLoading = loading
   const isFiltered = search.trim() !== "" || activeCategory !== ALL_CATEGORIES_LABEL
@@ -259,7 +284,9 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
     const trimmedSearch = search.trim().toLowerCase()
     const matchesSearch = !trimmedSearch || exercise.name.toLowerCase().startsWith(trimmedSearch)
     const matchesCategory = activeCategory === ALL_CATEGORIES_LABEL || exercise.muscleGroup === activeCategory
-    return matchesSearch && matchesCategory
+    const matchesSexo =
+      sexoFilter === SEXO_FILTER_ALL || exercise.sexo === sexoFilter || exercise.sexo === null
+    return matchesSearch && matchesCategory && matchesSexo
   }
 
   function openNewModal() {
@@ -330,6 +357,7 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
       equipamento: form.equipment.trim() || undefined,
       videoUrl: form.videoUrl.trim() || undefined,
       instrucaoTexto: form.instructions.trim() || undefined,
+      sexo: form.sexo,
     }
 
     setFormError(null)
@@ -393,11 +421,30 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
         )}
 
         <div className="sticky top-0 z-10 space-y-3 bg-background pb-3 pt-1">
-          <SearchInput
-            placeholder="Buscar exercício..."
-            value={search}
-            onChange={setSearch}
-          />
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <div className="flex-1">
+              <SearchInput
+                placeholder="Buscar exercício..."
+                value={search}
+                onChange={setSearch}
+              />
+            </div>
+            <Select
+              value={sexoFilter}
+              onValueChange={(value) => setSexoFilter(value as SexoApi | typeof SEXO_FILTER_ALL)}
+            >
+              <SelectTrigger className="w-full sm:w-[140px]">
+                <SelectValue placeholder="Sexo" />
+              </SelectTrigger>
+              <SelectContent>
+                {SEXO_FILTER_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
           {isLoading ? (
             <div className="flex flex-wrap gap-2">
               {Array.from({ length: 6 }, (_, index) => (
@@ -455,6 +502,14 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                     className={cn("border-l-4 transition-shadow hover:shadow-md", tone.bar)}
                     badges={[
                       { label: exercise.muscleGroup, variant: "outline", className: tone.badge },
+                      ...(exercise.sexo
+                        ? [
+                            {
+                              label: SEXO_FILTER_OPTIONS.find((o) => o.value === exercise.sexo)?.label ?? exercise.sexo,
+                              variant: "secondary" as const,
+                            },
+                          ]
+                        : []),
                       ...(exercise.videoUrl
                         ? [
                             {
@@ -598,6 +653,29 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                             <option key={group} value={group} />
                           ))}
                         </datalist>
+                      </label>
+                      <label className="block space-y-2">
+                        <span className="text-sm font-medium">Sexo</span>
+                        <Select
+                          value={form.sexo ?? SEXO_FILTER_ALL}
+                          onValueChange={(value) =>
+                            setForm((current) => ({
+                              ...current,
+                              sexo: value === SEXO_FILTER_ALL ? null : (value as SexoApi),
+                            }))
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Sexo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {SEXO_FILTER_OPTIONS.map((option) => (
+                              <SelectItem key={option.value} value={option.value}>
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </label>
                       <label className="block space-y-2">
                         <span className="text-sm font-medium">Equipamento</span>

@@ -58,6 +58,7 @@ function youtubeEmbedUrl(url: string): string | null {
 type TopTab = "protocolos" | "treinos"
 type NivelApi = "iniciante" | "avancado"
 type ObjetivoApi = "ganhar_musculo" | "ambos" | "secar"
+type SexoApi = "masculino" | "feminino"
 
 interface TemplateExerciseRow {
   prescription_id?: string
@@ -82,6 +83,7 @@ interface TemplateRow {
   template_id: string
   nivel: NivelApi
   objetivo: ObjetivoApi
+  sexo: SexoApi
   nome: string
   descricao: string | null
   categoria: string | null
@@ -170,6 +172,7 @@ interface ProtocolForm {
   descricao: string
   nivel: NivelApi
   objetivo: ObjetivoApi
+  sexo: SexoApi
   duracaoMinutos: number | null
   frequenciaSemanal: number | null
   imagemCapaUrl: string
@@ -226,6 +229,11 @@ const OBJETIVO_OPTIONS: { value: ObjetivoApi; label: string }[] = [
   { value: "secar", label: "Secar" },
 ]
 
+const SEXO_OPTIONS: { value: SexoApi; label: string }[] = [
+  { value: "masculino", label: "Masculino" },
+  { value: "feminino", label: "Feminino" },
+]
+
 const PLANO_FILTER_ALL = "__todos__"
 const ALUNOS_PAGE_SIZE = 20
 
@@ -253,6 +261,10 @@ function objetivoLabel(value: string) {
   return OBJETIVO_OPTIONS.find((option) => option.value === value)?.label ?? value
 }
 
+function sexoLabel(value: string) {
+  return SEXO_OPTIONS.find((option) => option.value === value)?.label ?? value
+}
+
 function categoriaLabel(value: string | null) {
   return value ? `Protocolo ${value}` : "Sem categoria"
 }
@@ -267,6 +279,7 @@ function toProtocolForm(template: TemplateRow | null, defaultCategoria: string):
       descricao: "",
       nivel: "iniciante",
       objetivo: "ganhar_musculo",
+      sexo: "masculino",
       duracaoMinutos: null,
       frequenciaSemanal: null,
       imagemCapaUrl: "",
@@ -282,6 +295,7 @@ function toProtocolForm(template: TemplateRow | null, defaultCategoria: string):
     descricao: template.descricao ?? "",
     nivel: template.nivel,
     objetivo: template.objetivo,
+    sexo: template.sexo,
     duracaoMinutos: template.duracao_minutos,
     frequenciaSemanal: template.frequencia_semanal,
     imagemCapaUrl: template.imagem_capa_url ?? "",
@@ -309,12 +323,12 @@ function protocolPayload(form: ProtocolForm, mode: "create" | "edit") {
     categoria: form.categoria || null,
     etiqueta: form.etiqueta || null,
     descricao: form.descricao || null,
-    // nivel/objetivo só entram na criação — o backend rejeita PATCH com
+    // nivel/objetivo/sexo só entram na criação — o backend rejeita PATCH com
     // esses campos de propósito (cada template ativo é único por
-    // nivel×objetivo, e o pipeline de classificação do quiz busca o
+    // nivel×objetivo×sexo, e o pipeline de classificação do quiz busca o
     // template por essa combinação; deixar editar quebraria esse mapeamento
-    // sem aviso). Duplique o protocolo pra mudar nível/objetivo.
-    ...(mode === "create" ? { nivel: form.nivel, objetivo: form.objetivo } : {}),
+    // sem aviso). Duplique o protocolo pra mudar nível/objetivo/sexo.
+    ...(mode === "create" ? { nivel: form.nivel, objetivo: form.objetivo, sexo: form.sexo } : {}),
     duracaoMinutos: form.duracaoMinutos,
     frequenciaSemanal: form.frequenciaSemanal,
     imagemCapaUrl: form.imagemCapaUrl.trim() || null,
@@ -1113,6 +1127,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                           badges={[
                             { label: nivelLabel(template.nivel), variant: "outline" },
                             { label: objetivoLabel(template.objetivo), variant: "secondary" },
+                            { label: sexoLabel(template.sexo), variant: "outline" },
                             { label: template.status, variant: template.status === "ativo" ? "default" : "outline" },
                           ]}
                           metadata={[
@@ -1391,9 +1406,28 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
                     </SelectContent>
                   </Select>
                 </label>
+                <label className="block space-y-1.5">
+                  <span className="text-xs font-medium uppercase text-muted-foreground">Sexo</span>
+                  <Select
+                    value={protocolFormState.sexo}
+                    onValueChange={(value) => updateProtocolForm({ sexo: value as SexoApi })}
+                    disabled={Boolean(protocolFormState.id)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Sexo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {SEXO_OPTIONS.map((option) => (
+                        <SelectItem key={option.value} value={option.value}>
+                          {option.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </label>
                 {protocolFormState.id && (
                   <p className="text-xs text-muted-foreground">
-                    Nível e objetivo não podem ser alterados depois de criado — duplique o protocolo pra mudar.
+                    Nível, objetivo e sexo não podem ser alterados depois de criado — duplique o protocolo pra mudar.
                   </p>
                 )}
                 <label className="block space-y-1.5">
