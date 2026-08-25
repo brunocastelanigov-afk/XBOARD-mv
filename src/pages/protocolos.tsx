@@ -436,6 +436,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   const [error, setError] = useState<string | null>(null)
   const [releasingUserId, setReleasingUserId] = useState<string | null>(null)
   const [search, setSearch] = useState("")
+  const [sexoFilter, setSexoFilter] = useState<SexoApi>("masculino")
   const [deletingTemplate, setDeletingTemplate] = useState<TemplateRow | null>(null)
   const [modalMode, setModalMode] = useState<"create" | "edit" | "program" | "choice" | "assign" | null>(null)
   const [choiceStudent, setChoiceStudent] = useState<UserProgramRow | null>(null)
@@ -581,11 +582,11 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   }, [forceLoading, appliedEmailQuery, planoFilter])
 
   const isLoading = forceLoading || loading
-  const baseTemplates = forceEmpty ? [] : templates
+  const baseTemplates = forceEmpty ? [] : templates.filter((template) => template.sexo === sexoFilter)
 
-  const totalProtocolos = templates.length
-  const totalTreinos = templates.reduce((sum, template) => sum + template.days.length, 0)
-  const totalExercicios = templates.reduce(
+  const totalProtocolos = baseTemplates.length
+  const totalTreinos = baseTemplates.reduce((sum, template) => sum + template.days.length, 0)
+  const totalExercicios = baseTemplates.reduce(
     (sum, template) =>
       sum + template.days.reduce((daySum, day) => daySum + day.exercises.length, 0),
     0
@@ -624,7 +625,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   }
 
   function openNewProtocolModal() {
-    setProtocolFormState(toProtocolForm(null, categorias[0]?.[0] ?? "A"))
+    setProtocolFormState({ ...toProtocolForm(null, categorias[0]?.[0] ?? "A"), sexo: sexoFilter })
     setProgramFormState(null)
     setModalError(null)
     setSaveState("idle")
@@ -1097,11 +1098,27 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
               <StatTile icon={Check} label="Exercícios" value={totalExercicios} tone="amber" />
             </div>
 
-            <SearchInput
-              value={search}
-              onChange={setSearch}
-              placeholder="Buscar protocolo"
-            />
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="flex-1">
+                <SearchInput
+                  value={search}
+                  onChange={setSearch}
+                  placeholder="Buscar protocolo"
+                />
+              </div>
+              <Select value={sexoFilter} onValueChange={(value) => setSexoFilter(value as SexoApi)}>
+                <SelectTrigger className="w-full sm:w-[160px]">
+                  <SelectValue placeholder="Sexo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {SEXO_OPTIONS.map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
 
             {isLoading ? (
               <div className="space-y-3">
