@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useSearchParams } from "react-router-dom"
-import { Clock, Crown, Eye, Lock, Undo2, Users, Zap } from "lucide-react"
+import { Clock, Crown, Eye, Lock, Mars, Undo2, Users, Venus, Zap } from "lucide-react"
 
 import { Badge } from "@/components/atoms/badge"
 import { Button } from "@/components/atoms/button"
@@ -71,6 +71,13 @@ type AdminUserStatsRow = {
   reembolso: number
   sem_acesso: number
   vencendo: number
+}
+
+type AdminSexUpsellStatsRow = {
+  sexo: "masculino" | "feminino"
+  purchase_count: number
+  refund_count: number
+  chargeback_count: number
 }
 
 type AdminUserDetailRow = {
@@ -273,6 +280,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     sem_acesso: 0,
     vencendo: 0,
   })
+  const [sexUpsellStats, setSexUpsellStats] = useState<AdminSexUpsellStatsRow[]>([])
   const [cursor, setCursor] = useState<{ createdAt: string; userId: string } | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const rankByUserIdRef = useRef(new Map<string, AdminUsersRevenueRankRow>())
@@ -312,11 +320,12 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
 
       try {
         const searchParams = buildSearchParams(appliedSearch)
-        const [users, rank, settings, statsRows] = await Promise.all([
+        const [users, rank, settings, statsRows, sexUpsellRows] = await Promise.all([
           adminRpc<AdminUserListRow[]>("admin_users_list", { p_limit: 100, ...searchParams }),
           adminRpc<AdminUsersRevenueRankRow[]>("admin_users_revenue_rank", { p_limit: 100 }),
           adminRpc<AdminAppSettingsRow[]>("admin_app_settings_current"),
           adminRpc<AdminUserStatsRow[]>("admin_users_stats"),
+          adminRpc<AdminSexUpsellStatsRow[]>("admin_sex_upsell_stats"),
         ])
 
         if (!active) return
@@ -330,6 +339,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
         setHasMore(users.length === 100)
 
         if (statsRows[0]) setStats(statsRows[0])
+        setSexUpsellStats(sexUpsellRows)
 
         const reassessmentDays = settings[0]?.reassessment_days
         if (typeof reassessmentDays === "number") {
@@ -531,6 +541,41 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
             <StatTile label="Elite" value={stats.elite} icon={Crown} tone="purple" />
             <StatTile label="Reembolso" value={stats.reembolso} icon={Undo2} tone="red" />
             <StatTile label="Sem acesso" value={stats.sem_acesso} icon={Lock} tone="amber" />
+          </div>
+        )}
+
+        {!loading && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <StatTile
+              label="Vendas Upsell (M)"
+              value={sexUpsellStats.find((row) => row.sexo === "masculino")?.purchase_count ?? 0}
+              icon={Mars}
+              tone="blue"
+            />
+            <StatTile
+              label="Vendas Upsell (F)"
+              value={sexUpsellStats.find((row) => row.sexo === "feminino")?.purchase_count ?? 0}
+              icon={Venus}
+              tone="purple"
+            />
+            <StatTile
+              label="Chargeback Upsell (M)"
+              value={(() => {
+                const row = sexUpsellStats.find((r) => r.sexo === "masculino")
+                return (row?.refund_count ?? 0) + (row?.chargeback_count ?? 0)
+              })()}
+              icon={Mars}
+              tone="red"
+            />
+            <StatTile
+              label="Chargeback Upsell (F)"
+              value={(() => {
+                const row = sexUpsellStats.find((r) => r.sexo === "feminino")
+                return (row?.refund_count ?? 0) + (row?.chargeback_count ?? 0)
+              })()}
+              icon={Venus}
+              tone="red"
+            />
           </div>
         )}
 
