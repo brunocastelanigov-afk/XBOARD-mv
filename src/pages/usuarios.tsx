@@ -15,6 +15,7 @@ import {
 } from "@/components/atoms/select"
 import { SearchInput } from "@/components/atoms/search-input"
 import { Skeleton } from "@/components/atoms/skeleton"
+import { Checkbox } from "@/components/ui/checkbox"
 import { ApplyValueCard, type ApplyValueCardApplyState } from "@/components/composites/apply-value-card"
 import { DataGrid } from "@/components/composites/data-grid"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
@@ -102,6 +103,12 @@ const STATUS_OPTIONS: { value: LeadStatus; label: string }[] = [
 ]
 
 const ALL = "__all__"
+
+// Preferência por navegador -- os StatTiles de venda/chargeback de upsell
+// por sexo são um dado de tracking (não de estado atual, ver conversa que
+// motivou isso), então ficam opcionais/escondidos por padrão pra não
+// poluir a tela de quem só quer ver os tiles de status de usuário.
+const SHOW_SEX_UPSELL_STATS_KEY = "crm.usuarios.showSexUpsellStats"
 
 const currencyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
@@ -281,6 +288,13 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     vencendo: 0,
   })
   const [sexUpsellStats, setSexUpsellStats] = useState<AdminSexUpsellStatsRow[]>([])
+  const [showSexUpsellStats, setShowSexUpsellStats] = useState(() => {
+    try {
+      return localStorage.getItem(SHOW_SEX_UPSELL_STATS_KEY) === "true"
+    } catch {
+      return false
+    }
+  })
   const [cursor, setCursor] = useState<{ createdAt: string; userId: string } | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const rankByUserIdRef = useRef(new Map<string, AdminUsersRevenueRankRow>())
@@ -545,6 +559,25 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
         )}
 
         {!loading && (
+          <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-muted-foreground">
+            <Checkbox
+              checked={showSexUpsellStats}
+              onCheckedChange={(checked) => {
+                const next = checked === true
+                setShowSexUpsellStats(next)
+                try {
+                  localStorage.setItem(SHOW_SEX_UPSELL_STATS_KEY, String(next))
+                } catch {
+                  // localStorage indisponível (modo privado/bloqueado) -- preferência
+                  // só não persiste entre sessões, não impede o toggle nesta.
+                }
+              }}
+            />
+            Mostrar vendas/chargeback de upsell por sexo
+          </label>
+        )}
+
+        {!loading && showSexUpsellStats && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile
               label="Vendas Upsell (M)"
