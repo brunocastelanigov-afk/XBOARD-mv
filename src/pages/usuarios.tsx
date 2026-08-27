@@ -110,7 +110,6 @@ const ALL = "__all__"
 // poluir a tela de quem só quer ver os tiles de status de usuário.
 const SHOW_SEX_UPSELL_STATS_KEY = "crm.usuarios.showSexUpsellStats"
 
-const currencyFormatter = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" })
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
@@ -499,8 +498,6 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     "#",
     "Lead",
     "Status",
-    "Receita",
-    "Reembolso",
     ...(canEdit ? ["Ação"] : []),
   ]
 
@@ -512,8 +509,6 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
         <span className="text-xs text-muted-foreground">{lead.email}</span>
       </div>,
       <StatusBadge key="status" status={lead.status} />,
-      currencyFormatter.format(lead.revenue),
-      currencyFormatter.format(lead.refund),
     ]
     if (canEdit) {
       row.push(
