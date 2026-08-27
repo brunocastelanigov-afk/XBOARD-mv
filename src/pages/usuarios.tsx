@@ -501,12 +501,10 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
     "Status",
     "Receita",
     "Reembolso",
-    "Faturamento líquido",
     ...(canEdit ? ["Ação"] : []),
   ]
 
   const dataGridRows = filteredLeads.map((lead, index) => {
-    const net = lead.revenue - lead.refund
     const row: React.ReactNode[] = [
       index + 1,
       <div key="lead" className="flex flex-col">
@@ -516,9 +514,6 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
       <StatusBadge key="status" status={lead.status} />,
       currencyFormatter.format(lead.revenue),
       currencyFormatter.format(lead.refund),
-      <span key="net" className="font-semibold text-foreground">
-        {currencyFormatter.format(net)}
-      </span>,
     ]
     if (canEdit) {
       row.push(
@@ -543,18 +538,17 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
         )}
 
         {loading ? (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
-            {Array.from({ length: 5 }, (_, index) => (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {Array.from({ length: 4 }, (_, index) => (
               <Skeleton key={index} className="h-24 w-full rounded-lg" />
             ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile label="Total" value={stats.total} icon={Users} tone="blue" />
             <StatTile label="Trinca" value={stats.trinca} icon={Zap} tone="blue" />
             <StatTile label="Elite" value={stats.elite} icon={Crown} tone="purple" />
-            <StatTile label="Reembolso" value={stats.reembolso} icon={Undo2} tone="red" />
-            <StatTile label="Sem acesso" value={stats.sem_acesso} icon={Lock} tone="amber" />
+            <StatTile label="Sem acesso / Reembolso" value={stats.sem_acesso} icon={Lock} tone="amber" />
           </div>
         )}
 
