@@ -110,6 +110,13 @@ const ALL = "__all__"
 // poluir a tela de quem só quer ver os tiles de status de usuário.
 const SHOW_SEX_UPSELL_STATS_KEY = "crm.usuarios.showSexUpsellStats"
 
+// 2026-08-28: a versão central do produto deixou de separar elementos por
+// sexo (ver treino-trinca-app docs/gendered-logic-removed.md). Os cards de
+// venda/chargeback de upsell por sexo ficam escondidos. Toggle, state, chave
+// localStorage e a RPC admin_sex_upsell_stats seguem intactos -- setar esta
+// flag para `true` reativa tudo (só frontend).
+const SHOW_SEX_UPSELL_CARDS = false
+
 const dateTimeFormatter = new Intl.DateTimeFormat("pt-BR", {
   day: "2-digit",
   month: "2-digit",
@@ -547,7 +554,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
           </div>
         )}
 
-        {!loading && (
+        {SHOW_SEX_UPSELL_CARDS && !loading && (
           <label className="flex w-fit cursor-pointer items-center gap-2 text-sm text-muted-foreground">
             <Checkbox
               checked={showSexUpsellStats}
@@ -566,7 +573,7 @@ export function UsuariosPage({ canEdit: canEditProp }: UsuariosPageProps) {
           </label>
         )}
 
-        {!loading && showSexUpsellStats && (
+        {SHOW_SEX_UPSELL_CARDS && !loading && showSexUpsellStats && (
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile
               label="Vendas Upsell (M)"
