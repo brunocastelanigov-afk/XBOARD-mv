@@ -258,6 +258,7 @@ export interface AbTestSummaryRow {
   price_cents: number
   split_percent: number
   views: number
+  clicks: number
   purchases_count: number
   purchases_gross_cents: number
   refunds_count: number
@@ -265,5 +266,6 @@ export interface AbTestSummaryRow {
   chargebacks_count: number
   chargebacks_cents: number
   net_revenue_cents: number
+  click_rate: number
   conversion_rate: number
 }

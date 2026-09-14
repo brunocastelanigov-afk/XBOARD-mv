@@ -56,6 +56,7 @@ export function TesteAbPage() {
 
   const summaryRows = summaryQuery.data ?? []
   const totalViews = sum(summaryRows.map((row) => Number(row.views ?? 0)))
+  const totalClicks = sum(summaryRows.map((row) => Number(row.clicks ?? 0)))
   const totalPurchases = sum(summaryRows.map((row) => Number(row.purchases_count ?? 0)))
   const totalNetRevenue = sum(summaryRows.map((row) => Number(row.net_revenue_cents ?? 0)))
   const totalSplit = sum(drafts.map((row) => Number(row.split_percent || 0)))
@@ -119,8 +120,12 @@ export function TesteAbPage() {
             value={summaryQuery.loading ? <Skeleton className="h-7 w-16" /> : formatNumber(totalViews)}
           />
           <MetricCard
+            title="Clicks"
+            hint="Cliques no CTA principal do Upsell-02."
+            value={summaryQuery.loading ? <Skeleton className="h-7 w-16" /> : formatNumber(totalClicks)}
+          />
+          <MetricCard
             title="Vendas"
-            hint="Atribuição de compra fica zerada até o payload real da Lastlink fechar o mapeamento."
             value={summaryQuery.loading ? <Skeleton className="h-7 w-16" /> : formatNumber(totalPurchases)}
           />
           <MetricCard
@@ -199,11 +204,13 @@ export function TesteAbPage() {
         </Card>
 
         <DataGrid
-          columns={["Variante", "Split", "Views", "Vendas", "Bruto", "Estornos", "Líquido", "Conversão"]}
+          columns={["Variante", "Split", "Views", "Clicks", "CTR", "Vendas", "Bruto", "Estornos", "Líquido", "Conversão"]}
           data={summaryRows.map((row) => [
             row.variant_label,
             `${row.split_percent}%`,
             formatNumber(row.views),
+            formatNumber(row.clicks),
+            `${Number(row.click_rate ?? 0).toFixed(2)}%`,
             formatNumber(row.purchases_count),
             formatCurrency(row.purchases_gross_cents),
             formatCurrency(row.refunds_cents + row.chargebacks_cents),
