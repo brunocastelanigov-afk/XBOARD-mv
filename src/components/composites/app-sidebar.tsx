@@ -1,4 +1,4 @@
-import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, Users, GraduationCap, MessageSquareText } from "lucide-react"
+import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, Users, GraduationCap, MessageSquareText, FlaskConical } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -22,6 +22,12 @@ const items = [
     title: "ROI de Campanhas",
     url: "/roi-campanhas",
     icon: DollarSign,
+    group: "traffic" as const,
+  },
+  {
+    title: "Teste A/B",
+    url: "/teste-ab",
+    icon: FlaskConical,
     group: "traffic" as const,
   },
   {

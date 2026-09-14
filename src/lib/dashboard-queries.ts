@@ -1,6 +1,8 @@
 import { supabase } from "@/lib/supabase"
 import type {
   AuditStatusFilters,
+  AbTestConfigRow,
+  AbTestSummaryRow,
   CampaignPerformanceRow,
   CampaignRoiRow,
   DashboardFilterOption,
@@ -132,6 +134,37 @@ export async function fetchCampaignRoi(filters: DashboardFilters, signal?: Abort
     }),
     signal
   )
+}
+
+export async function fetchUpsell2AbTestConfig(signal?: AbortSignal) {
+  return readRows<AbTestConfigRow>(
+    supabase.rpc("rpc_ab_test_upsell2_config"),
+    signal
+  )
+}
+
+export async function fetchUpsell2AbTestSummary(filters: DashboardFilters, signal?: AbortSignal) {
+  return readRows<AbTestSummaryRow>(
+    supabase.rpc("rpc_ab_test_upsell2_summary", {
+      p_date_from: filters.dateFrom,
+      p_date_to: filters.dateTo,
+    }),
+    signal
+  )
+}
+
+export async function updateUpsell2AbTestVariant(row: Pick<AbTestConfigRow, "test_key" | "variant_key" | "checkout_url" | "split_percent">) {
+  const { error } = await supabase
+    .from("ab_test_variants")
+    .update({
+      checkout_url: row.checkout_url,
+      split_percent: row.split_percent,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("test_key", row.test_key)
+    .eq("variant_key", row.variant_key)
+
+  if (error) throw error
 }
 
 export interface LeadAuditPage {

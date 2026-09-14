@@ -14,6 +14,7 @@ import { PerformancePage } from './pages/performance'
 
 import { AuditoriaPage } from './pages/auditoria'
 import { CampaignRoiPage } from './pages/campaign-roi'
+import { TesteAbPage } from './pages/teste-ab'
 import { LeadDetailPage } from './pages/lead-detail'
 import { UsuariosPage } from './pages/usuarios'
 import { ExerciciosPage } from './pages/exercicios'
@@ -64,6 +65,10 @@ const router = createBrowserRouter([
           {
             path: 'roi-campanhas',
             element: <CampaignRoiPage />
+          },
+          {
+            path: 'teste-ab',
+            element: <TesteAbPage />
           },
           {
             path: 'lead/:id',

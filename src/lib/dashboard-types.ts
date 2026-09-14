@@ -236,3 +236,34 @@ export interface CampaignRoiRow {
   upsell_orders: number
   unmatched_revenue_cents: number // vendas sem lead_id/Vtid resolvido, Story 1.1 AC 5
 }
+
+export interface AbTestConfigRow {
+  test_key: string
+  label: string
+  is_active: boolean
+  active_from: string
+  variant_key: string
+  variant_label: string
+  price_cents: number
+  checkout_url: string
+  one_click_upsell_id: NullableString
+  split_percent: number
+  sort_order: number
+}
+
+export interface AbTestSummaryRow {
+  test_key: string
+  variant_key: string
+  variant_label: string
+  price_cents: number
+  split_percent: number
+  views: number
+  purchases_count: number
+  purchases_gross_cents: number
+  refunds_count: number
+  refunds_cents: number
+  chargebacks_count: number
+  chargebacks_cents: number
+  net_revenue_cents: number
+  conversion_rate: number
+}
