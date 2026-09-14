@@ -97,8 +97,8 @@ export function TesteAbPage() {
   }
 
   return (
-    <div className="flex h-full flex-col animate-in fade-in duration-500">
-      <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-4 md:p-6">
+    <div className="flex min-w-0 flex-col animate-in fade-in duration-500">
+      <div className="flex min-w-0 flex-col gap-4 p-3 sm:gap-6 sm:p-4 md:p-6">
         <FilterBar
           showSearch={false}
           onReload={() => {
@@ -114,7 +114,7 @@ export function TesteAbPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+        <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
           <MetricCard
             title="Visualizações"
             value={summaryQuery.loading ? <Skeleton className="h-7 w-16" /> : formatNumber(totalViews)}
@@ -138,13 +138,13 @@ export function TesteAbPage() {
           />
         </div>
 
-        <Card className="rounded-lg border-border shadow-sm">
-          <CardHeader className="flex flex-row items-center justify-between gap-3 p-4">
-            <CardTitle className="flex items-center gap-2 text-base">
+        <Card className="min-w-0 rounded-lg border-border shadow-sm">
+          <CardHeader className="flex flex-col items-start justify-between gap-3 p-4 sm:flex-row sm:items-center">
+            <CardTitle className="flex min-w-0 items-center gap-2 text-base">
               <FlaskConical className="h-4 w-4 text-primary" />
               Configuração do Upsell-02
             </CardTitle>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
               <Button variant="outline" size="sm" onClick={configQuery.refetch}>
                 <RefreshCw />
                 Recarregar
@@ -171,10 +171,10 @@ export function TesteAbPage() {
               </div>
             )}
 
-            <div className="grid gap-3">
+            <div className="grid min-w-0 gap-3">
               {drafts.map((row, index) => (
-                <div key={row.variant_key} className="grid gap-3 rounded-lg border border-border p-3 md:grid-cols-[120px_120px_1fr]">
-                  <label className="grid gap-1 text-sm">
+                <div key={row.variant_key} className="grid min-w-0 gap-3 rounded-lg border border-border p-3 lg:grid-cols-[120px_120px_minmax(0,1fr)]">
+                  <label className="grid min-w-0 gap-1 text-sm">
                     <span className="font-medium text-foreground">{row.variant_label}</span>
                     <Input
                       type="number"
@@ -184,13 +184,13 @@ export function TesteAbPage() {
                       onChange={(event) => updateDraft(index, { split_percent: Number(event.currentTarget.value) })}
                     />
                   </label>
-                  <div className="grid gap-1 text-sm">
+                  <div className="grid min-w-0 gap-1 text-sm">
                     <span className="font-medium text-foreground">Preço</span>
                     <div className="flex h-8 items-center rounded-lg border border-border px-2.5 text-muted-foreground">
                       {formatCurrency(row.price_cents)}
                     </div>
                   </div>
-                  <label className="grid gap-1 text-sm">
+                  <label className="grid min-w-0 gap-1 text-sm">
                     <span className="font-medium text-foreground">Checkout</span>
                     <Input
                       value={row.checkout_url}
@@ -204,6 +204,7 @@ export function TesteAbPage() {
         </Card>
 
         <DataGrid
+          className="min-w-0 max-w-full"
           columns={["Variante", "Split", "Views", "Clicks", "CTR", "Vendas", "Bruto", "Estornos", "Líquido", "Conversão"]}
           data={summaryRows.map((row) => [
             row.variant_label,
