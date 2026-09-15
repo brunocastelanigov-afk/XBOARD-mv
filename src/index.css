@@ -240,3 +240,63 @@
   background-size: 200% 100%;
   animation: shimmer 1.8s ease-in-out infinite;
 }
+
+/* ==========================================================================
+   Tema Elite (Clonado do treino-trinca-app/treino-app)
+   ========================================================================== */
+
+.theme-elite {
+  --background: #040710;
+  --foreground: #fcfcfc;
+  --card: rgba(18, 28, 52, 0.92);
+  --card-foreground: #fcfcfc;
+  --popover: #090e1b;
+  --popover-foreground: #fcfcfc;
+  --primary: #9fbeff;
+  --primary-foreground: #040710;
+  --secondary: #131c35;
+  --secondary-foreground: #ebebeb;
+  --muted: #12192b;
+  --muted-foreground: #a6b3c9;
+  --accent: #2a6af4;
+  --accent-foreground: #ffffff;
+  --destructive: #dc2828;
+  --destructive-foreground: #fafafa;
+  --success: #21c45d;
+  --success-foreground: #ffffff;
+  --border: rgba(106, 160, 255, 0.34);
+  --input: #12192b;
+  --ring: #0f4bf0;
+  --chart-1: #0f4bf0;
+  --chart-2: #3c83f6;
+  --chart-3: #4560f7;
+  --chart-4: #6467f2;
+  --chart-5: #61a6fa;
+
+  /* Sidebar adaptado ao ambiente Elite */
+  --sidebar: #060a14;
+  --sidebar-foreground: #fcfcfc;
+  --sidebar-primary: #9fbeff;
+  --sidebar-primary-foreground: #040710;
+  --sidebar-accent: #131c35;
+  --sidebar-accent-foreground: #9fbeff;
+  --sidebar-border: rgba(106, 160, 255, 0.2);
+  --sidebar-ring: #0f4bf0;
+
+  /* Efeitos Elite */
+  --border-elite: rgba(106, 160, 255, 0.34);
+  --shadow-elite-glow: rgba(106, 160, 255, 0.28) 0px 0px 34px 0px, rgba(0, 0, 0, 0.38) 0px 22px 70px 0px;
+  --gradient-elite-button: linear-gradient(135deg, rgb(122, 174, 255), rgb(99, 157, 255) 48%, rgb(75, 134, 255));
+}
+
+/* Ambient glow para o shell da aplicação quando no tema elite */
+.theme-elite .app-shell,
+.theme-elite.app-shell,
+.theme-elite .elite-shell,
+.theme-elite.elite-shell {
+  background-image:
+    radial-gradient(circle at 18% -10%, rgba(59, 130, 246, 0.14), rgba(0, 0, 0, 0) 34%),
+    radial-gradient(circle at 88% 10%, rgba(14, 165, 233, 0.08), rgba(0, 0, 0, 0) 30%),
+    linear-gradient(var(--background), var(--background));
+}
+

@@ -146,13 +146,17 @@ const router = createBrowserRouter([
 ])
 
 import { TooltipProvider } from '@/components/atoms/tooltip'
+import { ThemeProvider } from '@/contexts/theme-context'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AuthProvider>
-      <TooltipProvider>
-        <RouterProvider router={router} />
-      </TooltipProvider>
-    </AuthProvider>
+    <ThemeProvider>
+      <AuthProvider>
+        <TooltipProvider>
+          <RouterProvider router={router} />
+        </TooltipProvider>
+      </AuthProvider>
+    </ThemeProvider>
   </StrictMode>,
 )
+
