@@ -14,6 +14,7 @@ interface FilterBarProps {
   showSearch?: boolean
   showTrafficSource?: boolean
   onSearchChange?: (value: string) => void
+  actions?: React.ReactNode
   // Problema 03: cada página tem sua própria query/refetch (RPCs diferentes), por isso o
   // botão de reload mora aqui (componente compartilhado) mas recebe o refetch de quem chama.
   onReload?: () => void
@@ -42,6 +43,7 @@ export function FilterBar({
   showSearch = true,
   showTrafficSource = false,
   onSearchChange,
+  actions,
   onReload,
   isRefetching = false,
 }: FilterBarProps) {
@@ -190,6 +192,7 @@ export function FilterBar({
         )}
       </div>
       <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+        {actions}
         <DateRangeCalendar
           dateFrom={filters.dateFrom}
           dateTo={filters.dateTo}

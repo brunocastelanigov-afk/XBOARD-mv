@@ -1,5 +1,5 @@
 import { useState } from "react"
-import { ListTree } from "lucide-react"
+import { ArrowDownWideNarrow, ArrowUpNarrowWide, ListTree } from "lucide-react"
 import { Button } from "@/components/atoms/button"
 import { CampaignWebinarDetailsDialog } from "@/components/composites/campaign-webinar-details-dialog"
 import { MetricCard } from "@/components/composites/metric-card"
@@ -58,8 +58,11 @@ const columns = [
   "Detalhes",
 ]
 
+type SortDirection = "desc" | "asc"
+
 export function CampaignRoiPage() {
   const { filters } = useDashboardFilters()
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc")
   const [detailsFor, setDetailsFor] = useState<{
     utmSource: string
     utmCampaign: string
@@ -72,18 +75,35 @@ export function CampaignRoiPage() {
   const rows = data ?? []
   const groupedRows = groupRowsByTrafficSource(rows)
   const sourceOrder = Object.keys(groupedRows).sort((a, b) => {
-    const totalDelta = sum(groupedRows[b], "total_revenue_cents") - sum(groupedRows[a], "total_revenue_cents")
-    return totalDelta || labelTrafficSource(a).localeCompare(labelTrafficSource(b))
+    const aOrders = sum(groupedRows[a], "front_orders")
+    const bOrders = sum(groupedRows[b], "front_orders")
+    const delta = sortDirection === "desc" ? bOrders - aOrders : aOrders - bOrders
+    return (
+      delta ||
+      sum(groupedRows[b], "total_revenue_cents") - sum(groupedRows[a], "total_revenue_cents") ||
+      labelTrafficSource(a).localeCompare(labelTrafficSource(b))
+    )
   })
   const visibleSourceOrder = filters.trafficSourceId
     ? sourceOrder.filter((source) => source === filters.trafficSourceId)
     : sourceOrder
 
+  function sortSourceRows(sourceRows: CampaignRoiRow[]) {
+    return [...sourceRows].sort((a, b) => {
+      const aVal = Number(a.front_orders ?? 0)
+      const bVal = Number(b.front_orders ?? 0)
+      if (sortDirection === "desc") {
+        return bVal - aVal || (b.total_revenue_cents ?? 0) - (a.total_revenue_cents ?? 0)
+      }
+      return aVal - bVal || (a.total_revenue_cents ?? 0) - (b.total_revenue_cents ?? 0)
+    })
+  }
+
   function renderGrid(sourceRows: CampaignRoiRow[]) {
     return (
       <DataGrid
         columns={columns}
-        data={sourceRows.map((row) => [
+        data={sortSourceRows(sourceRows).map((row) => [
           [row.utm_source, row.utm_campaign].filter(Boolean).join(" / ") || "Sem UTM",
           row.utm_medium ?? "-",
           formatNumber(row.front_orders),
@@ -126,6 +146,32 @@ export function CampaignRoiPage() {
         <FilterBar
           showSearch={false}
           showTrafficSource
+          actions={
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setSortDirection((prev) => (prev === "desc" ? "asc" : "desc"))}
+              className="h-8 gap-1.5 text-xs font-sans border-border/80 hover:border-primary/50"
+              title={
+                sortDirection === "desc"
+                  ? "Ordenar: Menor volume de vendas front primeiro"
+                  : "Ordenar: Maior volume de vendas front primeiro"
+              }
+            >
+              {sortDirection === "desc" ? (
+                <>
+                  <ArrowDownWideNarrow className="size-3.5 text-primary" />
+                  <span>Vendas Front: Maior ↓</span>
+                </>
+              ) : (
+                <>
+                  <ArrowUpNarrowWide className="size-3.5 text-primary" />
+                  <span>Vendas Front: Menor ↑</span>
+                </>
+              )}
+            </Button>
+          }
           onReload={refetch}
           isRefetching={isRefetching}
         />
