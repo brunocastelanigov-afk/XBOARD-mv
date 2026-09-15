@@ -230,10 +230,14 @@ export interface CampaignRoiRow {
   utm_medium: NullableString
   front_revenue_cents: number
   upsell_revenue_cents: number
+  upsell02_revenue_cents: number
+  webinar_revenue_cents: number
   total_revenue_cents: number
   reversed_revenue_cents: number // total estornado (refund + chargeback), Story 1.1 AC 7
   front_orders: number
   upsell_orders: number
+  upsell02_orders: number
+  webinar_orders: number
   unmatched_revenue_cents: number // vendas sem lead_id/Vtid resolvido, Story 1.1 AC 5
 }
 
@@ -268,4 +272,11 @@ export interface AbTestSummaryRow {
   net_revenue_cents: number
   click_rate: number
   conversion_rate: number
+}
+
+export interface WebinarProductRow {
+  product_code: string
+  product_name: string
+  purchase_count: number
+  gross_revenue_cents: number
 }

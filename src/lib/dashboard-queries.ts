@@ -13,6 +13,7 @@ import type {
   LeadResponseRow,
   PerformanceRow,
   StepResultRow,
+  WebinarProductRow,
 } from "@/lib/dashboard-types"
 
 function scopeParams(filters: DashboardFilters) {
@@ -148,6 +149,27 @@ export async function fetchUpsell2AbTestSummary(filters: DashboardFilters, signa
     supabase.rpc("rpc_ab_test_upsell2_summary", {
       p_date_from: filters.dateFrom,
       p_date_to: filters.dateTo,
+    }),
+    signal
+  )
+}
+
+export async function fetchWebinarProductsForCampaign(
+  params: {
+    utmSource: string
+    utmCampaign: string
+    utmMedium: string | null
+  },
+  filters: DashboardFilters,
+  signal?: AbortSignal
+) {
+  return readRows<WebinarProductRow>(
+    supabase.rpc("rpc_webinar_products_for_campaign", {
+      ...scopeParams(filters),
+      p_utm_source: params.utmSource,
+      p_utm_campaign: params.utmCampaign,
+      p_utm_medium: params.utmMedium,
+      p_traffic_source_id: filters.trafficSourceId,
     }),
     signal
   )

@@ -1,3 +1,7 @@
+import { useState } from "react"
+import { ListTree } from "lucide-react"
+import { Button } from "@/components/atoms/button"
+import { CampaignWebinarDetailsDialog } from "@/components/composites/campaign-webinar-details-dialog"
 import { MetricCard } from "@/components/composites/metric-card"
 import { FilterBar } from "@/components/composites/filter-bar"
 import { DataGrid } from "@/components/composites/data-grid"
@@ -43,14 +47,24 @@ const columns = [
   "Mídia",
   "Vendas Front",
   "Vendas Upsell",
+  "Vendas Upsell 02",
+  "Vendas Webinário",
   "Receita Front",
   "Receita Upsell",
+  "Receita Upsell 02",
+  "Receita Webinário",
   "Estornos",
   "Receita Total",
+  "Detalhes",
 ]
 
 export function CampaignRoiPage() {
   const { filters } = useDashboardFilters()
+  const [detailsFor, setDetailsFor] = useState<{
+    utmSource: string
+    utmCampaign: string
+    utmMedium: string | null
+  } | null>(null)
   const { data, error, loading, isRefetching, refetch } = useDashboardQuery(
     (signal) => fetchCampaignRoi(filters, signal),
     [filters]
@@ -74,10 +88,33 @@ export function CampaignRoiPage() {
           row.utm_medium ?? "-",
           formatNumber(row.front_orders),
           formatNumber(row.upsell_orders),
+          formatNumber(row.upsell02_orders),
+          formatNumber(row.webinar_orders),
           formatCurrency(row.front_revenue_cents),
           formatCurrency(row.upsell_revenue_cents),
+          formatCurrency(row.upsell02_revenue_cents),
+          formatCurrency(row.webinar_revenue_cents),
           formatCurrency(row.reversed_revenue_cents),
           formatCurrency(row.total_revenue_cents),
+          Number(row.webinar_orders ?? 0) > 0 ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() =>
+                setDetailsFor({
+                  utmSource: row.utm_source ?? "Sem UTM",
+                  utmCampaign: row.utm_campaign ?? "Sem campanha",
+                  utmMedium: row.utm_medium,
+                })
+              }
+            >
+              <ListTree data-icon="inline-start" />
+              Detalhes
+            </Button>
+          ) : (
+            "-"
+          ),
         ])}
       />
     )
@@ -99,14 +136,16 @@ export function CampaignRoiPage() {
           </div>
         )}
 
-        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+        <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-7">
           <MetricCard
             title="Receita Total"
-            hint="Receita líquida (front + upsell, já descontando estornos)."
+            hint="Receita líquida (front + upsell + upsell 02 + webinário, já descontando estornos)."
             value={loading ? <Skeleton className="h-7 w-16" /> : formatCurrency(sum(rows, "total_revenue_cents"))}
           />
           <MetricCard title="Receita Front" value={loading ? <Skeleton className="h-7 w-16" /> : formatCurrency(sum(rows, "front_revenue_cents"))} />
           <MetricCard title="Receita Upsell" value={loading ? <Skeleton className="h-7 w-16" /> : formatCurrency(sum(rows, "upsell_revenue_cents"))} />
+          <MetricCard title="Receita Upsell 02" value={loading ? <Skeleton className="h-7 w-16" /> : formatCurrency(sum(rows, "upsell02_revenue_cents"))} />
+          <MetricCard title="Receita Webinário" value={loading ? <Skeleton className="h-7 w-16" /> : formatCurrency(sum(rows, "webinar_revenue_cents"))} />
           <MetricCard
             title="Não Atribuída"
             hint="Vendas cujo lead_id/Vtid não bateu com nenhum evento de funil conhecido."
@@ -147,6 +186,18 @@ export function CampaignRoiPage() {
           </div>
         )}
       </div>
+
+      {detailsFor && (
+        <CampaignWebinarDetailsDialog
+          open={Boolean(detailsFor)}
+          onOpenChange={(open) => {
+            if (!open) setDetailsFor(null)
+          }}
+          utmSource={detailsFor.utmSource}
+          utmCampaign={detailsFor.utmCampaign}
+          utmMedium={detailsFor.utmMedium}
+        />
+      )}
     </div>
   )
 }
