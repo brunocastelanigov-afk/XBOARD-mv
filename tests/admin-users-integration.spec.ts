@@ -85,6 +85,13 @@ async function mockUsuariosRpcs(page: import("@playwright/test").Page) {
       ]),
     })
   )
+  await page.route("**/rest/v1/rpc/admin_sex_upsell_stats*", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    })
+  )
   await page.route("**/rest/v1/rpc/admin_users_filter_options*", (route) =>
     route.fulfill({
       status: 200,
@@ -222,6 +229,47 @@ test.describe("Story 15.5 — Usuarios e Liberar Usuario reais", () => {
 
     await expect.poll(() => assignCalled).toBe(true)
     expect(assignBody).toEqual({ templateId: "template-1" })
+  })
+
+  test("Usuarios — aba Protocolo mostra a categoria (A/B/C) do protocolo atual do aluno", async ({ page }) => {
+    await mockCrmSession(page)
+    await mockUsuariosRpcs(page)
+
+    await page.route("**/rest/v1/rpc/admin_protocol_templates_tree*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            template_id: "template-1",
+            nome: "Programa atual",
+            nivel: "iniciante",
+            objetivo: "ganhar_musculo",
+            categoria: "B",
+            status: "ativo",
+          },
+        ]),
+      })
+    )
+    await page.route("**/rest/v1/rpc/admin_user_program_detail*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([{ program_nome: "Programa atual" }]),
+      })
+    )
+
+    await page.goto("/crm/usuarios")
+    await expect(page.getByText("Aluno Real")).toBeVisible()
+    await page.getByRole("button", { name: "Ver lead" }).click()
+
+    await page.getByRole("tab", { name: "Protocolo" }).click()
+    const currentProtocoloRow = page.locator("div", { hasText: "Protocolo atual:" }).last()
+    await expect(currentProtocoloRow).toBeVisible()
+    // Categoria do template correspondente ao nome do protocolo atual ("Programa atual" -> categoria "B").
+    // Escopado à linha "Protocolo atual" porque o mesmo template também aparece (com a mesma categoria)
+    // na lista de opções abaixo.
+    await expect(currentProtocoloRow.getByText("Protocolo B")).toBeVisible()
   })
 
   test("Liberar Usuario busca, cria, libera e gera senha temporaria via contratos reais", async ({ page }) => {

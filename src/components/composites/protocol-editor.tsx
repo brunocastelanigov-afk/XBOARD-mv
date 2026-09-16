@@ -89,6 +89,10 @@ export interface ProtocolTemplatePickerProps {
   onSelect: (templateId: string) => void
 }
 
+function categoriaLabel(categoria: string | null | undefined) {
+  return categoria ? `Protocolo ${categoria}` : "Sem categoria"
+}
+
 function nivelLabel(value: string) {
   return value === "avancado" ? "Avançado" : value === "iniciante" ? "Iniciante" : value
 }
@@ -115,6 +119,10 @@ export function ProtocolTemplatePicker({
 }: ProtocolTemplatePickerProps) {
   const [query, setQuery] = useState("")
 
+  const currentTemplate = currentTemplateNome
+    ? templates.find((template) => template.nome === currentTemplateNome)
+    : undefined
+
   const normalizedQuery = query.trim().toLowerCase()
   const filtered = normalizedQuery
     ? templates.filter((template) => template.nome.toLowerCase().includes(normalizedQuery))
@@ -123,9 +131,12 @@ export function ProtocolTemplatePicker({
   return (
     <div className="space-y-3">
       {currentTemplateNome && (
-        <p className="text-sm text-muted-foreground">
-          Protocolo atual: <span className="font-medium text-foreground">{currentTemplateNome}</span>
-        </p>
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>
+            Protocolo atual: <span className="font-medium text-foreground">{currentTemplateNome}</span>
+          </span>
+          <Badge variant="outline">{categoriaLabel(currentTemplate?.categoria)}</Badge>
+        </div>
       )}
       {error && (
         <p className="rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
@@ -150,7 +161,7 @@ export function ProtocolTemplatePicker({
             >
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium text-foreground">{template.nome}</p>
-                <p className="text-xs text-muted-foreground">{template.categoria ? `Protocolo ${template.categoria}` : "Sem categoria"}</p>
+                <p className="text-xs text-muted-foreground">{categoriaLabel(template.categoria)}</p>
               </div>
               <div className="flex shrink-0 gap-1.5">
                 <Badge variant="outline">{nivelLabel(template.nivel)}</Badge>
