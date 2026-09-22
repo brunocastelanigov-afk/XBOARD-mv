@@ -254,7 +254,7 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
     setProtocolLoadError(null)
     try {
       const [templateRows, detailRows] = await Promise.all([
-        adminRpc<{ template_id: string; nome: string; nivel: string; objetivo: string; categoria: string | null; status: string }[]>(
+        adminRpc<{ template_id: string; nome: string; nivel: string; objetivo: string; categoria: string | null; sexo?: string | null; status: string }[]>(
           "admin_protocol_templates_tree",
           { p_status: "ativo", p_nivel: null, p_objetivo: null }
         ),
@@ -267,6 +267,7 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
           nivel: row.nivel,
           objetivo: row.objetivo,
           categoria: row.categoria,
+          sexo: row.sexo,
         }))
       )
       setCurrentProtocolNome(detailRows[0]?.program_nome ?? null)

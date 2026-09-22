@@ -12,6 +12,7 @@ export interface ProtocolEditorTemplateOption {
   nivel: string
   objetivo: string
   categoria: string | null
+  sexo?: string | null
 }
 
 interface ChoiceCardProps {
@@ -104,6 +105,13 @@ function objetivoLabel(value: string) {
   return value
 }
 
+function sexoLabel(value: string | null | undefined) {
+  if (!value) return null
+  if (value === "masculino") return "Masculino"
+  if (value === "feminino") return "Feminino"
+  return value
+}
+
 // Migração de protocolo (Problema 01): lista os protocolos ativos pra
 // escolher um novo para o aluno. Ao confirmar, chama
 // POST /admin/users/:userId/program/assign — o backend sempre insere um
@@ -131,11 +139,14 @@ export function ProtocolTemplatePicker({
   return (
     <div className="space-y-3">
       {currentTemplateNome && (
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
           <span>
             Protocolo atual: <span className="font-medium text-foreground">{currentTemplateNome}</span>
           </span>
           <Badge variant="outline">{categoriaLabel(currentTemplate?.categoria)}</Badge>
+          {currentTemplate?.sexo && (
+            <Badge variant="outline">{sexoLabel(currentTemplate.sexo)}</Badge>
+          )}
         </div>
       )}
       {error && (
@@ -163,9 +174,12 @@ export function ProtocolTemplatePicker({
                 <p className="truncate text-sm font-medium text-foreground">{template.nome}</p>
                 <p className="text-xs text-muted-foreground">{categoriaLabel(template.categoria)}</p>
               </div>
-              <div className="flex shrink-0 gap-1.5">
+              <div className="flex shrink-0 flex-wrap items-center gap-1.5">
                 <Badge variant="outline">{nivelLabel(template.nivel)}</Badge>
                 <Badge variant="secondary">{objetivoLabel(template.objetivo)}</Badge>
+                {template.sexo && (
+                  <Badge variant="outline">{sexoLabel(template.sexo)}</Badge>
+                )}
               </div>
             </button>
           ))}

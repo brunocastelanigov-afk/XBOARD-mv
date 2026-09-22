@@ -246,6 +246,7 @@ test.describe("Story 15.5 — Usuarios e Liberar Usuario reais", () => {
             nivel: "iniciante",
             objetivo: "ganhar_musculo",
             categoria: "B",
+            sexo: "masculino",
             status: "ativo",
           },
         ]),
@@ -270,6 +271,11 @@ test.describe("Story 15.5 — Usuarios e Liberar Usuario reais", () => {
     // Escopado à linha "Protocolo atual" porque o mesmo template também aparece (com a mesma categoria)
     // na lista de opções abaixo.
     await expect(currentProtocoloRow.getByText("Protocolo B")).toBeVisible()
+    await expect(currentProtocoloRow.getByText("Masculino")).toBeVisible()
+
+    // O card de opção de template também exibe a badge com o sexo
+    const templateCard = page.getByRole("button", { name: /Programa atual/ })
+    await expect(templateCard.getByText("Masculino")).toBeVisible()
   })
 
   test("Liberar Usuario busca, cria, libera e gera senha temporaria via contratos reais", async ({ page }) => {

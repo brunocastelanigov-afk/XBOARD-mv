@@ -1759,6 +1759,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
               nivel: template.nivel,
               objetivo: template.objetivo,
               categoria: template.categoria,
+              sexo: template.sexo,
             }))}
             currentTemplateNome={choiceStudent.program_nome}
             saving={assignSaveState !== "idle"}
