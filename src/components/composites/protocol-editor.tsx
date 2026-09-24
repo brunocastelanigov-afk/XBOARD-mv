@@ -144,6 +144,9 @@ export function ProtocolTemplatePicker({
             Protocolo atual: <span className="font-medium text-foreground">{currentTemplateNome}</span>
           </span>
           <Badge variant="outline">{categoriaLabel(currentTemplate?.categoria)}</Badge>
+          {currentTemplate?.nivel && (
+            <Badge variant="outline">{nivelLabel(currentTemplate.nivel)}</Badge>
+          )}
           {currentTemplate?.sexo && (
             <Badge variant="outline">{sexoLabel(currentTemplate.sexo)}</Badge>
           )}
