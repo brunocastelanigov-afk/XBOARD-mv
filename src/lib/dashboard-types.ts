@@ -5,6 +5,7 @@ export interface DashboardFilters {
   country: NullableString
   funnelVariant: NullableString
   trafficSourceId: NullableString
+  product: NullableString
   dateFrom: string
   dateTo: string
   is24hActive: boolean

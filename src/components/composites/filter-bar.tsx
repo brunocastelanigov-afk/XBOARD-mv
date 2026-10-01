@@ -13,6 +13,7 @@ interface FilterBarProps {
   search?: string
   showSearch?: boolean
   showTrafficSource?: boolean
+  showProduct?: boolean
   onSearchChange?: (value: string) => void
   actions?: React.ReactNode
   // Problema 03: cada página tem sua própria query/refetch (RPCs diferentes), por isso o
@@ -23,6 +24,12 @@ interface FilterBarProps {
 
 const allValue = "__all__"
 const nullValue = "__null__"
+
+// Slugs devem bater com public.campaign_product_slug() (migration 20261001140000).
+const productOptions = [
+  { value: "treino-trinca", label: "Treino Trinca" },
+  { value: "treino-trinca-pink", label: "Treino Trinca Pink" },
+]
 
 const trafficSourceLabels: Record<string, string> = {
   facebook: "Facebook / Meta",
@@ -42,6 +49,7 @@ export function FilterBar({
   search = "",
   showSearch = true,
   showTrafficSource = false,
+  showProduct = false,
   onSearchChange,
   actions,
   onReload,
@@ -159,6 +167,27 @@ export function FilterBar({
             ))}
           </SelectContent>
         </Select>
+        {showProduct && (
+          <Select
+            value={filters.product ?? allValue}
+            onValueChange={(value) =>
+              setFilters((current) => ({
+                ...current,
+                product: value === allValue ? null : value,
+              }))
+            }
+          >
+            <SelectTrigger className="w-full lg:w-[190px]">
+              <SelectValue placeholder="Produto" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={allValue}>Todos produtos</SelectItem>
+              {productOptions.map((product) => (
+                <SelectItem key={product.value} value={product.value}>{product.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
         {showTrafficSource && !restrictedTrafficSourceId && (
           <Select
             value={filters.trafficSourceId ?? allValue}

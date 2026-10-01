@@ -132,6 +132,7 @@ export async function fetchCampaignRoi(filters: DashboardFilters, signal?: Abort
     supabase.rpc("rpc_campaign_roi", {
       ...scopeParams(filters),
       p_traffic_source_id: filters.trafficSourceId,
+      p_product: filters.product,
     }),
     signal
   )
@@ -170,6 +171,7 @@ export async function fetchWebinarProductsForCampaign(
       p_utm_campaign: params.utmCampaign,
       p_utm_medium: params.utmMedium,
       p_traffic_source_id: filters.trafficSourceId,
+      p_product: filters.product,
     }),
     signal
   )
