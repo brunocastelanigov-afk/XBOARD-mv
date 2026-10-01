@@ -210,6 +210,7 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [deletingExercise, setDeletingExercise] = useState<Exercise | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [pendingVideoReplace, setPendingVideoReplace] = useState<{ previous: string; next: string } | null>(null)
   const [inactivationNotice, setInactivationNotice] = useState<string | null>(null)
 
   const categoryOptions = useMemo(() => [ALL_CATEGORIES_LABEL, ...categories], [categories])
@@ -347,8 +348,28 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
     }
   }
 
-  async function handleSubmit(event: React.FormEvent) {
+  function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    if (saveState !== "idle") return
+
+    // Trocar um vídeo que já existe exclui o atual (inclusive nos treinos já
+    // gerados das alunas) — exige confirmação explícita antes de salvar.
+    const currentExercise = editingId ? exercises.find((exercise) => exercise.id === editingId) : undefined
+    const nextVideoUrl = form.videoUrl.trim()
+    if (currentExercise?.videoUrl && nextVideoUrl && nextVideoUrl !== currentExercise.videoUrl) {
+      setPendingVideoReplace({ previous: currentExercise.videoUrl, next: nextVideoUrl })
+      return
+    }
+
+    void saveExercise()
+  }
+
+  async function handleConfirmVideoReplace() {
+    setPendingVideoReplace(null)
+    await saveExercise()
+  }
+
+  async function saveExercise() {
     if (saveState !== "idle") return
 
     const payload = {
@@ -741,6 +762,24 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
             </fieldset>
           </form>
         </EntityEditModalShell>
+      )}
+
+      {pendingVideoReplace && (
+        <EntityEditModalShell
+          title="Substituir vídeo do exercício"
+          description="Este exercício já tem um vídeo. Ao salvar, o vídeo atual será excluído e substituído pelo novo — inclusive nos treinos já gerados das alunas, exceto onde houver vídeo individual definido. Deseja continuar?"
+          onClose={() => setPendingVideoReplace(null)}
+          footer={
+            <>
+              <Button type="button" variant="outline" onClick={() => setPendingVideoReplace(null)}>
+                Cancelar
+              </Button>
+              <Button type="button" variant="destructive" onClick={handleConfirmVideoReplace}>
+                Excluir vídeo atual e salvar
+              </Button>
+            </>
+          }
+        />
       )}
 
       {deletingExercise && (

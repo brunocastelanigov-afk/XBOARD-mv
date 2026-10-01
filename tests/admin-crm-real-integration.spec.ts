@@ -451,4 +451,74 @@ test.describe("Story 15.6 — integrações reais Admin CRM", () => {
     expect(mutationHeaders).toHaveLength(3)
     expect(mutationHeaders.every(Boolean)).toBe(true)
   })
+  test("Exercicios pede confirmacao ao trocar um video que ja existe", async ({ page }) => {
+    const patchBodies: { videoUrl?: string }[] = []
+    await page.route("**/admin/exercises/exercise-1", (route) => {
+      if (route.request().method() !== "PATCH") return route.fallback()
+      const body = route.request().postDataJSON() as { videoUrl?: string }
+      patchBodies.push(body)
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          exerciseId: "exercise-1",
+          slug: "supino-reto",
+          nome: "Supino reto",
+          grupoMuscular: "Peito",
+          equipamento: "Barra",
+          videoUrl: body.videoUrl ?? null,
+          instrucaoTexto: "Desça a barra até o peito e suba com controle.",
+          isActive: true,
+        }),
+      })
+    })
+
+    await page.goto("/crm/exercicios")
+    await page.getByRole("button", { name: /Editar/ }).first().click()
+    await page.getByLabel("URL do vídeo").fill("https://youtube.com/shorts/novo")
+    await page.getByRole("button", { name: "Salvar exercício" }).click()
+
+    const dialogTitle = page.getByText("Substituir vídeo do exercício")
+    await expect(dialogTitle).toBeVisible()
+    await expect(page.getByText(/vídeo atual será excluído/)).toBeVisible()
+
+    await page.getByRole("button", { name: "Cancelar" }).click()
+    await expect(dialogTitle).toHaveCount(0)
+    expect(patchBodies).toHaveLength(0)
+
+    await page.getByRole("button", { name: "Salvar exercício" }).click()
+    await page.getByRole("button", { name: "Excluir vídeo atual e salvar" }).click()
+    await expect.poll(() => patchBodies.length).toBe(1)
+    expect(patchBodies[0].videoUrl).toBe("https://youtube.com/shorts/novo")
+  })
+
+  test("Exercicios sem video salva direto, sem modal de substituicao", async ({ page }) => {
+    let patchCalled = false
+    await page.route("**/admin/exercises/exercise-2", (route) => {
+      if (route.request().method() !== "PATCH") return route.fallback()
+      patchCalled = true
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          exerciseId: "exercise-2",
+          slug: "puxada-frontal",
+          nome: "Puxada frontal",
+          grupoMuscular: "Costas",
+          equipamento: "Máquina",
+          videoUrl: "https://youtube.com/shorts/puxada",
+          instrucaoTexto: "Puxe a barra mantendo o tronco firme.",
+          isActive: true,
+        }),
+      })
+    })
+
+    await page.goto("/crm/exercicios")
+    await page.getByRole("button", { name: /Editar/ }).nth(1).click()
+    await page.getByLabel("URL do vídeo").fill("https://youtube.com/shorts/puxada")
+    await page.getByRole("button", { name: "Salvar exercício" }).click()
+
+    await expect.poll(() => patchCalled).toBe(true)
+    await expect(page.getByText("Substituir vídeo do exercício")).toHaveCount(0)
+  })
 })
