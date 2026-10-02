@@ -146,6 +146,7 @@ export function CampaignRoiPage() {
         <FilterBar
           showSearch={false}
           showTrafficSource
+          showProduct
           actions={
             <Button
               type="button"
