@@ -101,8 +101,8 @@ export function FilterBar({
   }, [filters.trafficSourceId, setFilters, trafficSourceOptions])
 
   return (
-    <div className={cn("flex flex-col gap-3 rounded-lg border border-border bg-card p-3 lg:flex-row lg:items-center lg:justify-between", className)}>
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
+    <div data-testid="filter-bar" className={cn("flex flex-col gap-3 rounded-lg border border-border bg-card p-3 lg:flex-row lg:flex-wrap lg:items-center lg:justify-between", className)}>
+      <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
         <Select
           value={filters.funnelId ?? allValue}
           onValueChange={(value) =>
@@ -220,7 +220,7 @@ export function FilterBar({
           />
         )}
       </div>
-      <div className="flex flex-col gap-2 lg:flex-row lg:items-center">
+      <div className="flex flex-col gap-2 lg:ml-auto lg:flex-row lg:flex-wrap lg:items-center">
         {actions}
         <DateRangeCalendar
           dateFrom={filters.dateFrom}

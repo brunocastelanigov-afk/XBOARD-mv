@@ -125,7 +125,7 @@ test("filtro de fonte envia p_traffic_source_id e mostra apenas TikTok", async (
   })
 
   await page.goto("/roi-campanhas")
-  await page.getByRole("combobox").nth(3).click()
+  await page.getByRole("combobox").nth(4).click() // funil, país, variante, produto, fonte
   await page.getByRole("option", { name: "TikTok" }).click()
 
   await expect.poll(() => requestedTrafficSource).toBe("tiktok")
