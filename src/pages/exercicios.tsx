@@ -24,6 +24,7 @@ import { AdminApiError, adminMutation, adminRead, adminRpc } from "@/lib/admin-c
 import { ExerciseClassificationFields } from "@/components/composites/exercise-classification-fields"
 import {
   CLASSIFICACAO_VAZIA,
+  GRUPOS_DE_FORCA,
   camposFaltando,
   ehGrupoDeForca,
   mudou,
@@ -305,6 +306,7 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
   }, [search, activeCategory, sexoFilter])
 
   const isLoading = loading
+  const gruposDisponiveis = Array.from(new Set([...GRUPOS_DE_FORCA, ...categories, ...(form.muscleGroup ? [form.muscleGroup] : [])])).sort((a, b) => a.localeCompare(b, "pt-BR"))
   const visiveis = soPendentes ? exercises.filter((e) => playbookMeta.get(e.id)?.pendente) : exercises
   const isFiltered = search.trim() !== "" || activeCategory !== ALL_CATEGORIES_LABEL
 
@@ -426,6 +428,10 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
   function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
     if (saveState !== "idle") return
+    if (!form.muscleGroup.trim()) {
+      setFormError("Escolha o grupo muscular.")
+      return
+    }
 
     // Trocar um vídeo que já existe exclui o atual (inclusive nos treinos já
     // gerados das alunas) — exige confirmação explícita antes de salvar.
@@ -796,24 +802,30 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                           }
                         />
                       </label>
-                      <label className="block space-y-2">
+                      <div className="block space-y-2" data-testid="campo-grupo">
                         <span className="text-sm font-medium">
                           Grupo muscular <span className="text-destructive">*</span>
                         </span>
-                        <Input
-                          required
-                          list="exercise-muscle-groups"
-                          value={form.muscleGroup}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, muscleGroup: event.target.value }))
+                        {/* Seletor fechado: o grupo decide a classificação para a IA, então não aceita texto livre. */}
+                        <Select
+                          key={form.muscleGroup ? "escolhido" : "vazio"}
+                          value={form.muscleGroup || undefined}
+                          onValueChange={(value) =>
+                            setForm((current) => ({ ...current, muscleGroup: value, classificacao: { ...current.classificacao, fatias: [] } }))
                           }
-                        />
-                        <datalist id="exercise-muscle-groups">
-                          {categories.map((group) => (
-                            <option key={group} value={group} />
-                          ))}
-                        </datalist>
-                      </label>
+                        >
+                          <SelectTrigger aria-label="Grupo muscular">
+                            <SelectValue placeholder="Selecione o grupo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {gruposDisponiveis.map((group) => (
+                              <SelectItem key={group} value={group}>
+                                {group}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <label className="block space-y-2">
                         <span className="text-sm font-medium">Sexo</span>
                         <Select
