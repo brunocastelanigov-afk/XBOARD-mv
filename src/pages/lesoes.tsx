@@ -232,6 +232,11 @@ export function LesoesPage() {
                         <div className="flex flex-wrap items-center gap-2">
                           <span className="font-medium">{e.nome}</span>
                           <Badge variant="outline">{e.grupoMuscular}</Badge>
+                          {e.pendente && (
+                            <Badge variant="destructive" title="Aguardando classificação: a IA ainda não usa este exercício">
+                              pendente
+                            </Badge>
+                          )}
                           {e.riscosOrigem === "humano" ? (
                             <Badge variant="accent" title={editado ? `Editado em ${editado}` : undefined}>
                               humano

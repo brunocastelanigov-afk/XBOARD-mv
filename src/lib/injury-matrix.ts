@@ -23,6 +23,11 @@ export interface ExercicioDaMatriz {
   pesado?: boolean
   complexo?: boolean
   queimacao?: boolean
+  tipo?: string | null
+  dificuldade?: string | null
+  regioesTrabalhadas?: string[]
+  /** Exercício novo ainda não classificado: a IA não o usa. */
+  pendente?: boolean
   playbookStatus?: string | null
   playbookFonte?: string | null
   riscos: RegiaoDeLesao[]

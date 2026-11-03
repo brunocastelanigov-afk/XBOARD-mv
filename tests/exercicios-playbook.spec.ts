@@ -55,6 +55,10 @@ const MATRIZ = {
       queimacao: false,
       playbookStatus: "proposto",
       playbookFonte: "regras",
+      tipo: "isolador",
+      dificuldade: "iniciante",
+      regioesTrabalhadas: ["biceps"],
+      pendente: false,
       riscos: [],
       riscosOrigem: null,
       riscosEditadoEm: null,
@@ -116,7 +120,7 @@ test.describe("Exercícios: fatia, pesado e complexo", () => {
     await secao.getByRole("checkbox", { name: /^Complexo/ }).click()
     await page.getByRole("button", { name: "Salvar exercício" }).click()
     await expect.poll(() => chamadas).toEqual(["PATCH", "PUT"])
-    expect(corpoPlaybook).toEqual({ fatias: ["biceps_braquial", "biceps_cabeca_curta"], pesado: false, complexo: true })
+    expect(corpoPlaybook).toEqual({ fatias: ["biceps_braquial", "biceps_cabeca_curta"], pesado: false, complexo: true, queimacao: false, tipo: "isolador", dificuldade: "iniciante", regioesTrabalhadas: ["biceps"] })
   })
 
   test("sem mudança no playbook, salvar não chama o PUT", async ({ page }) => {
@@ -156,6 +160,106 @@ test.describe("Exercícios: fatia, pesado e complexo", () => {
     })
     await page.getByTestId("secao-playbook").getByRole("checkbox", { name: /^Pesado/ }).click()
     await page.getByRole("button", { name: "Salvar exercício" }).click()
-    await expect(page.getByText("Dados básicos salvos, mas a fatia")).toBeVisible()
+    await expect(page.getByText("Dados básicos salvos, mas a classificação")).toBeVisible()
+  })
+})
+
+
+const LINHA_NOVA = {
+  exercise_id: "ex-novo",
+  slug: "rosca_nova",
+  nome: "Rosca nova",
+  grupo_muscular: "Bíceps",
+  equipamento: "Halter",
+  video_url: null,
+  instrucao_texto: null,
+  is_active: true,
+  sexo: null,
+  cursor_nome: "Rosca nova",
+  cursor_exercise_id: "ex-novo",
+}
+
+const RESPOSTA_CRIACAO = { exerciseId: "ex-novo", slug: "rosca_nova", nome: "Rosca nova", grupoMuscular: "Bíceps", equipamento: "Halter", videoUrl: null, instrucaoTexto: null, isActive: true, sexo: null }
+
+async function abrirNovo(page: Page, chamadas: Array<{ metodo: string; url: string; corpo: unknown }>) {
+  await mockCrmSession(page)
+  await page.route("**/rest/v1/rpc/admin_exercises_list*", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([LINHA, LINHA_NOVA].slice(0, 1)) }),
+  )
+  await page.route("**/admin/exercises/injury-matrix", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MATRIZ) }),
+  )
+  await page.route("**/admin/exercises", (route) => {
+    chamadas.push({ metodo: route.request().method(), url: route.request().url(), corpo: route.request().postDataJSON() })
+    return route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(RESPOSTA_CRIACAO) })
+  })
+  await page.route("**/admin/exercises/ex-novo/**", (route) => {
+    chamadas.push({ metodo: route.request().method(), url: route.request().url(), corpo: route.request().postDataJSON() })
+    return route.fulfill({ status: 200, contentType: "application/json", body: "{}" })
+  })
+  await page.goto("/crm/exercicios")
+  await expect(page.getByText("Rosca martelo").first()).toBeVisible()
+  await page.getByRole("button", { name: "Novo Exercício" }).click()
+  await page.getByLabel(/^Nome/).fill("Rosca nova")
+  await page.getByLabel(/^Grupo muscular/).fill("Bíceps")
+  await expect(page.getByTestId("secao-playbook")).toBeVisible()
+}
+
+test.describe("Exercício novo: nasce pendente até ser classificado", () => {
+  test("cadastro completo envia o exercício, a classificação e os riscos de lesão", async ({ page }) => {
+    const chamadas: Array<{ metodo: string; url: string; corpo: unknown }> = []
+    await abrirNovo(page, chamadas)
+    const secao = page.getByTestId("secao-playbook")
+    await secao.getByLabel("Tipo do exercício").selectOption("isolador")
+    await secao.getByLabel("Dificuldade").selectOption("iniciante")
+    await secao.getByRole("checkbox", { name: /Fatia Biceps braquial/ }).click()
+    await secao.getByRole("checkbox", { name: /Região Bíceps/ }).click()
+    await secao.getByRole("checkbox", { name: /Evitar em lesão de cotovelo e punho/ }).click()
+    await page.getByRole("button", { name: "Salvar exercício" }).click()
+    await expect.poll(() => chamadas.map((c) => `${c.metodo} ${new URL(c.url).pathname.replace("/admin/exercises", "")}`)).toEqual([
+      "POST ",
+      "PUT /ex-novo/playbook-metadata",
+      "PUT /ex-novo/injury-risks",
+    ])
+    expect(chamadas[1]?.corpo).toEqual({
+      fatias: ["biceps_braquial"],
+      pesado: false,
+      complexo: false,
+      queimacao: false,
+      tipo: "isolador",
+      dificuldade: "iniciante",
+      regioesTrabalhadas: ["biceps"],
+    })
+    expect(chamadas[2]?.corpo).toEqual({ riscos: ["cotovelo_punho"] })
+  })
+
+  test("cadastro incompleto cria o exercício, não classifica e avisa que ficou pendente", async ({ page }) => {
+    const chamadas: Array<{ metodo: string; url: string; corpo: unknown }> = []
+    await abrirNovo(page, chamadas)
+    await expect(page.getByRole("note")).toContainText("falta: tipo, dificuldade, regiões trabalhadas")
+    await page.getByRole("button", { name: "Salvar exercício" }).click()
+    await expect(page.getByText(/foi criado como pendente/)).toBeVisible()
+    expect(chamadas.map((c) => c.metodo)).toEqual(["POST"])
+  })
+
+  test("a lista mostra o selo pendente e o filtro 'Aguardando classificação' esconde os já classificados", async ({ page }) => {
+    await mockCrmSession(page)
+    const pendente = { ...MATRIZ.exercicios[0], exerciseId: "ex-pend", nome: "Rosca pendente", pendente: true, playbookFonte: null }
+    await page.route("**/rest/v1/rpc/admin_exercises_list*", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([LINHA, { ...LINHA, exercise_id: "ex-pend", slug: "rosca_pendente", nome: "Rosca pendente", cursor_nome: "Rosca pendente", cursor_exercise_id: "ex-pend" }]),
+      }),
+    )
+    await page.route("**/admin/exercises/injury-matrix", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ ...MATRIZ, exercicios: [MATRIZ.exercicios[0], pendente] }) }),
+    )
+    await page.goto("/crm/exercicios")
+    await expect(page.getByText("Rosca pendente").first()).toBeVisible()
+    await expect(page.getByText("Pendente de classificação")).toHaveCount(1)
+    await page.getByLabel("Aguardando classificação").check()
+    await expect(page.getByText("Rosca martelo")).toHaveCount(0)
+    await expect(page.getByText("Rosca pendente").first()).toBeVisible()
   })
 })
