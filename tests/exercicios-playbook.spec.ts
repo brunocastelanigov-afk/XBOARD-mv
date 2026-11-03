@@ -201,7 +201,8 @@ async function abrirNovo(page: Page, chamadas: Array<{ metodo: string; url: stri
   await expect(page.getByText("Rosca martelo").first()).toBeVisible()
   await page.getByRole("button", { name: "Novo Exercício" }).click()
   await page.getByLabel(/^Nome/).fill("Rosca nova")
-  await page.getByLabel(/^Grupo muscular/).fill("Bíceps")
+  await page.getByRole("combobox", { name: "Grupo muscular" }).click()
+  await page.getByRole("option", { name: "Bíceps" }).click()
   await expect(page.getByTestId("secao-playbook")).toBeVisible()
 }
 
@@ -261,5 +262,41 @@ test.describe("Exercício novo: nasce pendente até ser classificado", () => {
     await page.getByLabel("Aguardando classificação").check()
     await expect(page.getByText("Rosca martelo")).toHaveCount(0)
     await expect(page.getByText("Rosca pendente").first()).toBeVisible()
+  })
+})
+
+test.describe("Grupo muscular: seletor fechado", () => {
+  test("lista só grupos existentes, sem digitação livre, e exige a escolha antes de salvar", async ({ page }) => {
+    const chamadas: Array<{ metodo: string; url: string; corpo: unknown }> = []
+    await abrirNovo(page, chamadas)
+    // trocar o grupo abre as opções do grupo certo e limpa a fatia escolhida antes
+    await page.getByRole("combobox", { name: "Grupo muscular" }).click()
+    const opcoes = await page.getByRole("option").allTextContents()
+    expect(opcoes).toEqual(expect.arrayContaining(["Abdômen", "Bíceps", "Costas", "Peito", "Pernas"]))
+    await page.keyboard.press("Escape")
+    await expect(page.locator("datalist")).toHaveCount(0)
+  })
+
+  test("sem grupo escolhido, salvar mostra o aviso e não chama a API", async ({ page }) => {
+    const chamadas: string[] = []
+    await mockCrmSession(page)
+    await page.route("**/rest/v1/rpc/admin_exercises_list*", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify([LINHA]) }),
+    )
+    await page.route("**/admin/exercises/injury-matrix", (route) =>
+      route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MATRIZ) }),
+    )
+    await page.route("**/admin/exercises", (route) => {
+      chamadas.push(route.request().method())
+      return route.fulfill({ status: 200, contentType: "application/json", body: "{}" })
+    })
+    await page.goto("/crm/exercicios")
+    await expect(page.getByText("Rosca martelo").first()).toBeVisible()
+    await page.getByRole("button", { name: "Novo Exercício" }).click()
+    await page.getByLabel(/^Nome/).fill("Sem grupo")
+    await expect(page.getByRole("combobox", { name: "Grupo muscular" })).toContainText("Selecione o grupo")
+    await page.getByRole("button", { name: "Salvar exercício" }).click()
+    await expect(page.getByText("Escolha o grupo muscular.")).toBeVisible()
+    expect(chamadas).toEqual([])
   })
 })
