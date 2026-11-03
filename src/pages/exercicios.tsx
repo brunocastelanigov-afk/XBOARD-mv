@@ -8,8 +8,6 @@ import { Input } from "@/components/atoms/input"
 import { SearchInput } from "@/components/atoms/search-input"
 import { Skeleton } from "@/components/atoms/skeleton"
 import { Textarea } from "@/components/atoms/textarea"
-import { Badge } from "@/components/atoms/badge"
-import { Checkbox } from "@/components/ui/checkbox"
 import {
   Select,
   SelectContent,
@@ -23,7 +21,16 @@ import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-
 import { EntityListHeader } from "@/components/composites/entity-list-header"
 import { TwoColumnFormLayout } from "@/components/composites/two-column-form-layout"
 import { AdminApiError, adminMutation, adminRead, adminRpc } from "@/lib/admin-crm-api"
-import { rotuloDaFatia, type MatrizDeLesaoResponse } from "@/lib/injury-matrix"
+import { ExerciseClassificationFields } from "@/components/composites/exercise-classification-fields"
+import {
+  CLASSIFICACAO_VAZIA,
+  camposFaltando,
+  ehGrupoDeForca,
+  mudou,
+  riscosMudaram,
+  type Classificacao,
+} from "@/lib/exercise-classification"
+import type { MatrizDeLesaoResponse, RegiaoDeLesao } from "@/lib/injury-matrix"
 import { cn } from "@/lib/utils"
 
 const ALL_CATEGORIES_LABEL = "Todos"
@@ -109,21 +116,15 @@ interface ExerciseFormState {
   instructions: string
   videoUrl: string
   sexo: SexoApi | null
-  fatias: string[]
-  pesado: boolean
-  complexo: boolean
+  classificacao: Classificacao
 }
 
-/** Metadado do playbook (Story 19.12): fatia, pesado e complexo, editáveis por admin. */
-interface PlaybookMeta {
-  fatias: string[]
-  pesado: boolean
-  complexo: boolean
-  status: string | null
+/** Classificação do exercício para a IA (Story 19.12) vinda da API, com a origem e se ainda está pendente. */
+interface MetaDoExercicio {
+  classificacao: Classificacao
   fonte: string | null
+  pendente: boolean
 }
-
-const PLAYBOOK_VAZIO: PlaybookMeta = { fatias: [], pesado: false, complexo: false, status: null, fonte: null }
 
 function rowToExercise(row: AdminExerciseRow): Exercise {
   return {
@@ -157,7 +158,7 @@ function responseToExercise(row: AdminExerciseResponse): Exercise {
   }
 }
 
-function toFormState(exercise: Exercise | null, meta: PlaybookMeta = PLAYBOOK_VAZIO): ExerciseFormState {
+function toFormState(exercise: Exercise | null, meta?: MetaDoExercicio): ExerciseFormState {
   if (!exercise) {
     return {
       name: "",
@@ -166,15 +167,11 @@ function toFormState(exercise: Exercise | null, meta: PlaybookMeta = PLAYBOOK_VA
       instructions: "",
       videoUrl: "",
       sexo: null,
-      fatias: [],
-      pesado: false,
-      complexo: false,
+      classificacao: CLASSIFICACAO_VAZIA,
     }
   }
   return {
-    fatias: meta.fatias,
-    pesado: meta.pesado,
-    complexo: meta.complexo,
+    classificacao: meta?.classificacao ?? CLASSIFICACAO_VAZIA,
     name: exercise.name,
     muscleGroup: exercise.muscleGroup,
     equipment: exercise.equipment,
@@ -235,7 +232,8 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
   const [deleteLoading, setDeleteLoading] = useState(false)
   const [pendingVideoReplace, setPendingVideoReplace] = useState<{ previous: string; next: string } | null>(null)
   const [inactivationNotice, setInactivationNotice] = useState<string | null>(null)
-  const [playbookMeta, setPlaybookMeta] = useState<Map<string, PlaybookMeta>>(new Map())
+  const [playbookMeta, setPlaybookMeta] = useState<Map<string, MetaDoExercicio>>(new Map())
+  const [soPendentes, setSoPendentes] = useState(false)
   const [fatiasPorGrupo, setFatiasPorGrupo] = useState<Record<string, string[]>>({})
   const [playbookIndisponivel, setPlaybookIndisponivel] = useState(false)
   const [playbookCarregado, setPlaybookCarregado] = useState(false)
@@ -307,6 +305,7 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
   }, [search, activeCategory, sexoFilter])
 
   const isLoading = loading
+  const visiveis = soPendentes ? exercises.filter((e) => playbookMeta.get(e.id)?.pendente) : exercises
   const isFiltered = search.trim() !== "" || activeCategory !== ALL_CATEGORIES_LABEL
 
   function matchesCurrentFilters(exercise: Exercise) {
@@ -318,25 +317,38 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
     return matchesSearch && matchesCategory && matchesSexo
   }
 
+  async function carregarMeta() {
+    const dados = await adminRead<MatrizDeLesaoResponse>("/admin/exercises/injury-matrix")
+    setFatiasPorGrupo(dados.fatiasPorGrupo ?? {})
+    setPlaybookMeta(
+      new Map(
+        dados.exercicios.map((e) => [
+          e.exerciseId,
+          {
+            classificacao: {
+              fatias: e.fatias,
+              pesado: e.pesado ?? false,
+              complexo: e.complexo ?? false,
+              queimacao: e.queimacao ?? false,
+              tipo: e.tipo ?? "",
+              dificuldade: e.dificuldade ?? "",
+              regioes: e.regioesTrabalhadas ?? [],
+              riscos: e.riscos as RegiaoDeLesao[],
+            },
+            fonte: e.playbookFonte === "humano" ? "humano" : "proposta",
+            pendente: e.pendente ?? false,
+          },
+        ]),
+      ),
+    )
+    setPlaybookCarregado(true)
+  }
+
   useEffect(() => {
     let cancelado = false
-    adminRead<MatrizDeLesaoResponse>("/admin/exercises/injury-matrix")
-      .then((dados) => {
-        if (cancelado) return
-        setFatiasPorGrupo(dados.fatiasPorGrupo ?? {})
-        setPlaybookCarregado(true)
-        setPlaybookMeta(
-          new Map(
-            dados.exercicios.map((e) => [
-              e.exerciseId,
-              { fatias: e.fatias, pesado: e.pesado ?? false, complexo: e.complexo ?? false, status: e.playbookStatus ?? null, fonte: e.playbookFonte ?? null },
-            ]),
-          ),
-        )
-      })
-      .catch(() => {
-        if (!cancelado) setPlaybookIndisponivel(true)
-      })
+    carregarMeta().catch(() => {
+      if (!cancelado) setPlaybookIndisponivel(true)
+    })
     return () => {
       cancelado = true
     }
@@ -348,7 +360,7 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
     if (!editingId || playbookEditado) return
     const meta = playbookMeta.get(editingId)
     if (!meta) return
-    setForm((current) => ({ ...current, fatias: meta.fatias, pesado: meta.pesado, complexo: meta.complexo }))
+    setForm((current) => ({ ...current, classificacao: meta.classificacao }))
   }, [playbookMeta, editingId, playbookEditado])
 
   function openNewModal() {
@@ -460,27 +472,43 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
 
       const nextExercise = responseToExercise(saved)
       let avisoPlaybook: string | null = null
-      if (editingId && !playbookIndisponivel) {
-        const atual = playbookMeta.get(editingId) ?? PLAYBOOK_VAZIO
+      let avisoPendente: string | null = null
+      const criando = !editingId
+      if (!playbookIndisponivel && ehGrupoDeForca(nextExercise.muscleGroup)) {
+        const atual = editingId ? (playbookMeta.get(editingId)?.classificacao ?? CLASSIFICACAO_VAZIA) : CLASSIFICACAO_VAZIA
         const opcoes = fatiasPorGrupo[nextExercise.muscleGroup] ?? []
-        const fatiasDoForm = form.fatias.filter((f) => opcoes.includes(f))
-        const mudou =
-          form.pesado !== atual.pesado ||
-          form.complexo !== atual.complexo ||
-          fatiasDoForm.join("|") !== atual.fatias.join("|")
-        if (mudou) {
-          try {
-            const meta = await adminMutation<{ fatias: string[]; pesado: boolean; complexo: boolean; playbookStatus: string; playbookFonte: string }>(
-              `/admin/exercises/${editingId}/playbook-metadata`,
-              { method: "PUT", body: { fatias: fatiasDoForm, pesado: form.pesado, complexo: form.complexo } },
-            )
-            setPlaybookMeta((current) =>
-              new Map(current).set(editingId, { fatias: meta.fatias, pesado: meta.pesado, complexo: meta.complexo, status: meta.playbookStatus, fonte: meta.playbookFonte }),
-            )
-          } catch (playbookError) {
-            avisoPlaybook = errorMessage(playbookError)
+        const c: Classificacao = { ...form.classificacao, fatias: form.classificacao.fatias.filter((f) => opcoes.includes(f)) }
+        const faltando = camposFaltando(c, nextExercise.muscleGroup)
+        const completo = faltando.length === 0
+        // Edição: manda o que mudou. Criação: só manda se a classificação estiver completa; senão o exercício
+        // fica pendente (a IA não o usa) e a pessoa é avisada do que falta.
+        const enviarPlaybook = criando ? completo : mudou(c, atual)
+        const enviarRiscos = criando ? completo : riscosMudaram(c, atual)
+        try {
+          if (enviarPlaybook) {
+            await adminMutation(`/admin/exercises/${saved.exerciseId}/playbook-metadata`, {
+              method: "PUT",
+              body: {
+                fatias: c.fatias,
+                pesado: c.pesado,
+                complexo: c.complexo,
+                queimacao: c.queimacao,
+                ...(c.tipo ? { tipo: c.tipo } : {}),
+                ...(c.dificuldade ? { dificuldade: c.dificuldade } : {}),
+                ...(c.regioes.length > 0 ? { regioesTrabalhadas: c.regioes } : {}),
+              },
+            })
           }
+          if (enviarRiscos) {
+            await adminMutation(`/admin/exercises/${saved.exerciseId}/injury-risks`, { method: "PUT", body: { riscos: c.riscos } })
+          }
+          if (criando && !completo) {
+            avisoPendente = `"${nextExercise.name}" foi criado como pendente: a IA só vai usá-lo depois de classificado (falta: ${faltando.join(", ")}). Edite o exercício para completar.`
+          }
+        } catch (playbookError) {
+          avisoPlaybook = errorMessage(playbookError)
         }
+        if (enviarPlaybook || enviarRiscos) await carregarMeta().catch(() => undefined)
       }
       setExercises((current) => {
         if (editingId) {
@@ -491,11 +519,15 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
         return matchesCurrentFilters(nextExercise) ? [nextExercise, ...current] : current
       })
       if (avisoPlaybook) {
-        setFormError(`Dados básicos salvos, mas a fatia, o pesado e o complexo não foram gravados: ${avisoPlaybook}`)
+        // O exercício já existe: a tela passa para a edição dele, para um novo "Salvar" não criar outro igual.
+        setEditingId(saved.exerciseId)
+        setModalMode("edit")
+        setFormError(`Dados básicos salvos, mas a classificação para a IA não foi gravada: ${avisoPlaybook}`)
         setSaveState("idle")
         void loadCategories()
         return
       }
+      if (avisoPendente) setInactivationNotice(avisoPendente)
       setSaveState("saved")
       void loadCategories()
       window.setTimeout(closeModal, 700)
@@ -557,6 +589,18 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                 ))}
               </SelectContent>
             </Select>
+            {playbookCarregado && (
+              <label className="flex items-center gap-2 whitespace-nowrap text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4"
+                  checked={soPendentes}
+                  onChange={(event) => setSoPendentes(event.target.checked)}
+                  aria-label="Aguardando classificação"
+                />
+                Aguardando classificação
+              </label>
+            )}
           </div>
           {isLoading ? (
             <div className="flex flex-wrap gap-2">
@@ -592,16 +636,16 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
               </div>
             ))}
           </div>
-        ) : exercises.length === 0 ? (
+        ) : visiveis.length === 0 ? (
           <EmptyState
             icon={Dumbbell}
             message={
-              isFiltered ? "Nenhum exercício encontrado." : "Nenhum exercício cadastrado ainda."
+              soPendentes ? "Nenhum exercício aguardando classificação." : isFiltered ? "Nenhum exercício encontrado." : "Nenhum exercício cadastrado ainda."
             }
           />
         ) : (
           <div className="flex flex-col gap-4">
-            {exercises.map((exercise) => {
+            {visiveis.map((exercise) => {
               const tone = categoryTone(exercise.muscleGroup)
               return (
                 <div
@@ -622,6 +666,9 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                               variant: "secondary" as const,
                             },
                           ]
+                        : []),
+                      ...(playbookMeta.get(exercise.id)?.pendente
+                        ? [{ label: "Pendente de classificação", variant: "destructive" as const }]
                         : []),
                       ...(exercise.videoUrl
                         ? [
@@ -852,91 +899,27 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                 />
               </div>
 
-              {editingId && (
-                <div className="space-y-3 rounded-lg border border-border p-4" data-testid="secao-playbook">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div>
-                      <h4 className="text-sm font-medium">Playbook do treino por IA</h4>
-                      <p className="text-xs text-muted-foreground">
-                        O gerador usa estes dados para escolher o exercício de cada vaga do treino.
-                      </p>
-                    </div>
-                    {!playbookIndisponivel &&
-                      (playbookMeta.get(editingId)?.fonte === "humano" ? (
-                        <Badge variant="accent">humano</Badge>
-                      ) : (
-                        <Badge variant="secondary" title="Proposta automática, ainda não revisada por uma pessoa">
-                          proposta
-                        </Badge>
-                      ))}
-                  </div>
-                  {playbookIndisponivel ? (
-                    <p className="text-sm text-muted-foreground">Metadados do playbook indisponíveis no momento.</p>
-                  ) : !playbookCarregado ? (
-                    <p className="text-sm text-muted-foreground">Carregando metadados do playbook...</p>
-                  ) : (
-                    <>
-                      <div className="space-y-2">
-                        <span className="text-sm font-medium">Fatia</span>
-                        {(fatiasPorGrupo[form.muscleGroup.trim()] ?? []).length === 0 ? (
-                          <p className="text-xs text-muted-foreground">Este grupo muscular não usa fatias.</p>
-                        ) : (
-                          <div className="flex flex-wrap gap-x-4 gap-y-2">
-                            {(fatiasPorGrupo[form.muscleGroup.trim()] ?? []).map((fatia) => (
-                              <label key={fatia} className="flex items-center gap-2 text-sm">
-                                <Checkbox
-                                  checked={form.fatias.includes(fatia)}
-                                  disabled={isReadOnly}
-                                  onCheckedChange={(checked) => {
-                                    setPlaybookEditado(true)
-                                    setForm((current) => ({
-                                      ...current,
-                                      fatias: checked === true ? [...current.fatias, fatia] : current.fatias.filter((f) => f !== fatia),
-                                    }))
-                                  }}
-                                  aria-label={`Fatia ${rotuloDaFatia(fatia)}`}
-                                />
-                                {rotuloDaFatia(fatia)}
-                              </label>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex flex-wrap gap-x-6 gap-y-2">
-                        <label className="flex items-start gap-2 text-sm">
-                          <Checkbox
-                            checked={form.pesado}
-                            disabled={isReadOnly}
-                            onCheckedChange={(checked) => {
-                              setPlaybookEditado(true)
-                              setForm((current) => ({ ...current, pesado: checked === true }))
-                            }}
-                            aria-label="Pesado"
-                          />
-                          <span>
-                            Pesado
-                            <span className="block text-xs text-muted-foreground">Composto pesado: 6 a 8 repetições e 90 a 120 s de intervalo no avançado.</span>
-                          </span>
-                        </label>
-                        <label className="flex items-start gap-2 text-sm">
-                          <Checkbox
-                            checked={form.complexo}
-                            disabled={isReadOnly}
-                            onCheckedChange={(checked) => {
-                              setPlaybookEditado(true)
-                              setForm((current) => ({ ...current, complexo: checked === true }))
-                            }}
-                            aria-label="Complexo"
-                          />
-                          <span>
-                            Complexo
-                            <span className="block text-xs text-muted-foreground">Técnica exigente: o iniciante não recebe este exercício.</span>
-                          </span>
-                        </label>
-                      </div>
-                    </>
-                  )}
-                </div>
+              {playbookIndisponivel ? (
+                <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground" data-testid="secao-playbook">
+                  Metadados do playbook indisponíveis no momento.
+                </p>
+              ) : !playbookCarregado ? (
+                <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground" data-testid="secao-playbook">
+                  Carregando metadados do playbook...
+                </p>
+              ) : (
+                <ExerciseClassificationFields
+                  grupo={form.muscleGroup}
+                  value={form.classificacao}
+                  onChange={(next) => {
+                    setPlaybookEditado(true)
+                    setForm((current) => ({ ...current, classificacao: next }))
+                  }}
+                  fatiasDoGrupo={fatiasPorGrupo[form.muscleGroup.trim()] ?? []}
+                  readOnly={isReadOnly}
+                  fonte={editingId ? ((playbookMeta.get(editingId)?.fonte as "humano" | "proposta" | undefined) ?? null) : null}
+                  pendente={editingId ? (playbookMeta.get(editingId)?.pendente ?? false) : false}
+                />
               )}
             </fieldset>
           </form>
