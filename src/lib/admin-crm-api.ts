@@ -45,7 +45,7 @@ async function readError(response: Response) {
   }
 }
 
-export async function adminMutation<T>(path: string, init: { method: "POST" | "PATCH" | "DELETE"; body?: unknown }) {
+export async function adminMutation<T>(path: string, init: { method: "POST" | "PUT" | "PATCH" | "DELETE"; body?: unknown }) {
   const token = await crmAccessToken()
   const response = await fetch(adminEndpoint(path), {
     method: init.method,
