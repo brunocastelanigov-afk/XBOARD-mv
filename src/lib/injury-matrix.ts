@@ -19,6 +19,12 @@ export interface ExercicioDaMatriz {
   grupoMuscular: string
   equipamento: string | null
   fatias: string[]
+  /** Metadado do playbook editável na tela Exercícios (Story 19.12). */
+  pesado?: boolean
+  complexo?: boolean
+  queimacao?: boolean
+  playbookStatus?: string | null
+  playbookFonte?: string | null
   riscos: RegiaoDeLesao[]
   riscosOrigem: "proposta" | "humano" | null
   riscosEditadoEm: string | null
@@ -26,6 +32,8 @@ export interface ExercicioDaMatriz {
 }
 
 export interface MatrizDeLesaoResponse {
+  /** Fatias válidas do playbook por grupo muscular (opções do seletor). */
+  fatiasPorGrupo?: Record<string, string[]>
   regioes: RegiaoDeLesao[]
   exercicios: ExercicioDaMatriz[]
 }
