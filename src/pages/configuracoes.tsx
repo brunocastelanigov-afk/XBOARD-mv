@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/atoms/car
 import { Input } from "@/components/atoms/input"
 import { Skeleton } from "@/components/atoms/skeleton"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
-import { adminMutation, adminRpc } from "@/lib/admin-crm-api"
+import { adminMutation, adminRead, adminRpc } from "@/lib/admin-crm-api"
 import { cn } from "@/lib/utils"
 
 type SaveState = "idle" | "saving" | "saved"
@@ -28,6 +28,7 @@ interface AdminAppSettingsRow {
 }
 
 interface AdminSettingsMutationResponse {
+  protocolLibraryMax: number
   upgradeUrl: string | null
   renewalTrincaUrl: string | null
   renewalEliteUrl: string | null
@@ -38,6 +39,7 @@ interface AdminSettingsMutationResponse {
 }
 
 interface ConfiguracoesFormState {
+  protocolLibraryMax: number
   appName: string
   validadeTrincaDias: number
   validadeEliteDias: number
@@ -47,6 +49,7 @@ interface ConfiguracoesFormState {
 }
 
 const emptyForm: ConfiguracoesFormState = {
+  protocolLibraryMax: 4,
   appName: "",
   validadeTrincaDias: 1,
   validadeEliteDias: 1,
@@ -55,8 +58,9 @@ const emptyForm: ConfiguracoesFormState = {
   supportLink: "",
 }
 
-function settingsToForm(settings: AdminAppSettingsRow): ConfiguracoesFormState {
+function settingsToForm(settings: AdminAppSettingsRow, protocolLibraryMax: number): ConfiguracoesFormState {
   return {
+    protocolLibraryMax,
     appName: settings.app_name,
     validadeTrincaDias: settings.trinca_validity_days,
     validadeEliteDias: settings.elite_validity_days,
@@ -94,12 +98,15 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
     setError(null)
 
     try {
-      const settingsRows = await adminRpc<AdminAppSettingsRow[]>("admin_app_settings_current")
+      const [settingsRows, library] = await Promise.all([
+        adminRpc<AdminAppSettingsRow[]>("admin_app_settings_current"),
+        adminRead<{ protocolLibraryMax: number }>("/admin/settings/protocol-library"),
+      ])
 
       const settings = settingsRows[0]
       if (!settings) throw new Error("Contrato admin_app_settings_current retornou vazio.")
 
-      setForm(settingsToForm(settings))
+      setForm(settingsToForm(settings, library.protocolLibraryMax))
     } catch (loadError) {
       setError(errorMessage(loadError, "Erro ao carregar configurações."))
     } finally {
@@ -129,6 +136,7 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
       const saved = await adminMutation<AdminSettingsMutationResponse>("/admin/settings", {
         method: "PATCH",
         body: {
+          protocolLibraryMax: form.protocolLibraryMax,
           renewalTrincaUrl: nullableUrl(form.renewLinkTrinca),
           renewalEliteUrl: nullableUrl(form.renewLinkElite),
           supportUrl: nullableUrl(form.supportLink),
@@ -139,6 +147,7 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
 
       setForm((current) => ({
         ...current,
+        protocolLibraryMax: saved.protocolLibraryMax,
         renewLinkTrinca: saved.renewalTrincaUrl ?? "",
         renewLinkElite: saved.renewalEliteUrl ?? "",
         supportLink: saved.supportUrl ?? "",
@@ -202,6 +211,26 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
                   onChange={(event) => updateField("supportLink", event.target.value)}
                 />
                 <p className="text-xs text-muted-foreground">Esse link será usado no botão de suporte do aplicativo.</p>
+              </label>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border shadow-sm">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-base">Biblioteca de treinos</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4 pt-0">
+            {isLoading ? <Skeleton className="h-8 w-full" /> : (
+              <label className="block space-y-2">
+                <span className="text-sm font-medium">Máximo de protocolos por perfil</span>
+                <Input type="number" min={3} max={5} step={1} required
+                  value={form.protocolLibraryMax} disabled={!canEdit || saveState === "saving"}
+                  onChange={(event) => updateField("protocolLibraryMax", event.target.valueAsNumber)} />
+                <p className="text-xs text-muted-foreground">
+                  Limite global de 3 a 5 alternativas completas por conjunto de respostas. Cada alternativa contém os três dias de treino.
+                  Ao diminuir, os protocolos excedentes são preservados e ficam fora do sorteio. Ao aumentar, a biblioteca pode completar os conjuntos nas próximas gerações.
+                </p>
               </label>
             )}
           </CardContent>

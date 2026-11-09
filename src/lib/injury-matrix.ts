@@ -1,7 +1,7 @@
 // Matriz de lesão (Story 19.12 do treino-trinca-app): em quais lesões cada exercício NÃO deve ser alocado.
 // Lógica pura (sem React) para o painel de impacto e para o aviso antes de salvar.
 
-export const REGIOES_DE_LESAO = ["ombro", "joelho", "lombar", "cotovelo_punho", "quadril"] as const
+export const REGIOES_DE_LESAO = ["ombro", "joelho", "lombar", "cotovelo_punho", "quadril", "sinal_grave", "obesidade"] as const
 export type RegiaoDeLesao = (typeof REGIOES_DE_LESAO)[number]
 
 export const ROTULO_REGIAO: Record<RegiaoDeLesao, string> = {
@@ -10,6 +10,8 @@ export const ROTULO_REGIAO: Record<RegiaoDeLesao, string> = {
   lombar: "Lombar",
   cotovelo_punho: "Cotovelo e punho",
   quadril: "Quadril",
+  sinal_grave: "Sinal grave",
+  obesidade: "Obesidade",
 }
 
 export interface ExercicioDaMatriz {
