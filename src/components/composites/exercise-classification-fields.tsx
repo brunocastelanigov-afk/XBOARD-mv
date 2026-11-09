@@ -130,8 +130,8 @@ export function ExerciseClassificationFields({ grupo, value, onChange, fatiasDoG
 
       <div className="space-y-2">
         <span className="text-sm font-medium">
-          Evitar em lesão de
-          <span className="ml-2 text-xs font-normal text-muted-foreground">sem marca = liberado para toda lesão</span>
+          Evitar quando houver
+          <span className="ml-2 text-xs font-normal text-muted-foreground">sem marca = nenhuma exclusão cadastrada</span>
         </span>
         <div className="flex flex-wrap gap-x-4 gap-y-2">
           {REGIOES_DE_LESAO.map((r) => (
@@ -140,7 +140,7 @@ export function ExerciseClassificationFields({ grupo, value, onChange, fatiasDoG
                 checked={value.riscos.includes(r)}
                 disabled={readOnly}
                 onCheckedChange={(c) => set({ riscos: alternar<RegiaoDeLesao>(value.riscos, r, c === true) })}
-                aria-label={`Evitar em lesão de ${ROTULO_REGIAO[r].toLowerCase()}`}
+                aria-label={`Evitar quando houver ${ROTULO_REGIAO[r].toLowerCase()}`}
               />
               {ROTULO_REGIAO[r]}
             </label>

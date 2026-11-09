@@ -95,7 +95,7 @@ export function LesoesPage() {
       if (
         esvaziam.length > 0 &&
         !window.confirm(
-          `Bloquear "${exercicio.nome}" para lesão em ${ROTULO_REGIAO[regiao].toLowerCase()} deixa sem nenhum exercício: ${esvaziam
+          `Bloquear "${exercicio.nome}" quando houver ${ROTULO_REGIAO[regiao].toLowerCase()} deixa sem nenhum exercício: ${esvaziam
             .map(rotuloDaFatia)
             .join(", ")}. O gerador vai relaxar a faixa de volume dessa região para esses alunos. Continuar?`,
         )
@@ -140,8 +140,8 @@ export function LesoesPage() {
       <div className="flex flex-1 flex-col gap-4 p-4 md:p-6">
         <EntityListHeader title="Matriz de lesão" className="items-start" />
         <p className="-mt-3 max-w-3xl text-sm text-muted-foreground">
-          Marque as lesões em que o exercício <strong>não deve ser alocado</strong>. O gerador de treino por IA retira o exercício
-          do aluno que reportar dor naquela região. Sem nenhuma marca, o exercício é liberado para toda lesão.
+          Marque as situações em que o exercício <strong>não deve ser alocado</strong>: lesões por região, sinal grave relatado e faixa de IMC de obesidade. O gerador retira o exercício
+          do aluno que se enquadrar. Sem nenhuma marca, nenhuma exclusão está cadastrada.
         </p>
 
         {erro && (
@@ -162,10 +162,10 @@ export function LesoesPage() {
             </div>
             <Select value={foco} onValueChange={setFoco}>
               <SelectTrigger className="w-full sm:w-[220px]">
-                <SelectValue placeholder="Ver por lesão" />
+                <SelectValue placeholder="Ver por situação" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={SEM_FOCO}>Todas as lesões</SelectItem>
+                <SelectItem value={SEM_FOCO}>Todas as situações</SelectItem>
                 {REGIOES_DE_LESAO.map((r) => (
                   <SelectItem key={r} value={r}>
                     Bloqueados em {ROTULO_REGIAO[r].toLowerCase()}
@@ -184,7 +184,7 @@ export function LesoesPage() {
         {impacto && (
           <div className="rounded-lg border border-border bg-muted/30 p-4 text-sm" data-testid="painel-impacto">
             <p className="font-medium">
-              Aluno com lesão em {ROTULO_REGIAO[impacto.regiao].toLowerCase()}: {impacto.bloqueados} de {impacto.total} exercícios bloqueados
+              Aluno com {impacto.regiao === "sinal_grave" || impacto.regiao === "obesidade" ? "" : "lesão em "}{ROTULO_REGIAO[impacto.regiao].toLowerCase()}: {impacto.bloqueados} de {impacto.total} exercícios bloqueados
             </p>
             <p className="mt-2 text-muted-foreground">
               Fatias do playbook sem nenhum exercício liberado:{" "}
@@ -258,7 +258,7 @@ export function LesoesPage() {
                               checked={e.riscos.includes(r)}
                               disabled={ocupado}
                               onCheckedChange={() => void alternar(e, r)}
-                              aria-label={`${e.nome}: evitar em lesão de ${ROTULO_REGIAO[r].toLowerCase()}`}
+                              aria-label={`${e.nome}: evitar quando houver ${ROTULO_REGIAO[r].toLowerCase()}`}
                             />
                           </div>
                         </td>
