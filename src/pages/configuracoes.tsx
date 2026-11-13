@@ -5,6 +5,7 @@ import { Check, Loader2 } from "lucide-react"
 import { Button } from "@/components/atoms/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/atoms/card"
 import { Input } from "@/components/atoms/input"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/atoms/select"
 import { Skeleton } from "@/components/atoms/skeleton"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
 import { adminMutation, adminRead, adminRpc } from "@/lib/admin-crm-api"
@@ -79,6 +80,13 @@ function errorMessage(error: unknown, fallback: string) {
   return error instanceof Error ? error.message : fallback
 }
 
+type CheckoutGateway = "lastlink" | "payt"
+
+interface CheckoutSettings {
+  checkoutSwitchEnabled: boolean
+  checkoutGateway: CheckoutGateway
+}
+
 interface ConfiguracoesPageProps {
   canEdit?: boolean
 }
@@ -92,6 +100,38 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
   const [error, setError] = useState<string | null>(null)
   const [form, setForm] = useState<ConfiguracoesFormState>(emptyForm)
   const [saveState, setSaveState] = useState<SaveState>("idle")
+  const [checkoutSettings, setCheckoutSettings] = useState<CheckoutSettings | null>(null)
+  const [checkoutError, setCheckoutError] = useState<string | null>(null)
+  const [savingCheckout, setSavingCheckout] = useState(false)
+
+  useEffect(() => {
+    if (forceLoading) return
+    let active = true
+    void adminRead<CheckoutSettings>("/admin/settings/checkout-gateway").then(
+      (settings) => { if (active) setCheckoutSettings(settings) },
+      (error: unknown) => {
+        if (active) setCheckoutError(errorMessage(error, "Erro ao carregar o checkout."))
+      },
+    )
+    return () => { active = false }
+  }, [forceLoading])
+
+  async function saveCheckout(change: Partial<CheckoutSettings>) {
+    if (!canEdit || savingCheckout) return
+    setSavingCheckout(true)
+    setCheckoutError(null)
+    try {
+      const saved = await adminMutation<CheckoutSettings>("/admin/settings", {
+        method: "PATCH",
+        body: change,
+      })
+      setCheckoutSettings(saved)
+    } catch (error) {
+      setCheckoutError(errorMessage(error, "Erro ao salvar o checkout."))
+    } finally {
+      setSavingCheckout(false)
+    }
+  }
 
   async function loadSettings() {
     setLoading(true)
@@ -233,6 +273,50 @@ export function ConfiguracoesPage({ canEdit: canEditProp }: ConfiguracoesPagePro
                 </p>
               </label>
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="border border-border shadow-sm">
+          <CardHeader className="p-4 pb-2">
+            <CardTitle className="text-base">Checkout</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 p-4 pt-0">
+            {checkoutError && <p role="alert" className="text-sm text-destructive">{checkoutError}</p>}
+            {checkoutSettings ? (
+              <>
+                <div className="flex items-center justify-between gap-4">
+                  <span id="checkout-switch-label" className="text-sm font-medium">Troca de checkout</span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    role="switch"
+                    aria-labelledby="checkout-switch-label"
+                    aria-checked={checkoutSettings.checkoutSwitchEnabled}
+                    disabled={!canEdit || savingCheckout}
+                    onClick={() => void saveCheckout({ checkoutSwitchEnabled: !checkoutSettings.checkoutSwitchEnabled })}
+                  >
+                    {checkoutSettings.checkoutSwitchEnabled ? "Ligada" : "Desligada"}
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <label htmlFor="checkout-gateway" className="text-sm font-medium">Gateway</label>
+                  <Select
+                    value={checkoutSettings.checkoutGateway}
+                    disabled={!canEdit || savingCheckout}
+                    onValueChange={(gateway: CheckoutGateway) => void saveCheckout({ checkoutGateway: gateway })}
+                  >
+                    <SelectTrigger id="checkout-gateway">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="lastlink">Lastlink</SelectItem>
+                      <SelectItem value="payt">Payt</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">Com a troca desligada, o app usa a Lastlink.</p>
+                </div>
+              </>
+            ) : checkoutError ? null : <Skeleton className="h-8 w-full" />}
           </CardContent>
         </Card>
 
