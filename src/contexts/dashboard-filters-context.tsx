@@ -37,7 +37,7 @@ const initialFilters: DashboardFilters = {
 }
 
 export function DashboardFiltersProvider({ children }: { children: ReactNode }) {
-  const { restrictedTrafficSourceId } = useAuth()
+  const { restrictedTrafficSourceId, restrictedTrafficSourceIds } = useAuth()
   const [filters, setFiltersState] = useState<DashboardFilters>(initialFilters)
   const {
     data: options,
@@ -52,10 +52,20 @@ export function DashboardFiltersProvider({ children }: { children: ReactNode }) 
     (update) => {
       setFiltersState((current) => {
         const next = typeof update === "function" ? (update as (prev: DashboardFilters) => DashboardFilters)(current) : update
-        return restrictedTrafficSourceId ? { ...next, trafficSourceId: restrictedTrafficSourceId } : next
+        if (restrictedTrafficSourceId) return { ...next, trafficSourceId: restrictedTrafficSourceId }
+        // Role com várias fontes (ex.: leo_traffic): o usuário escolhe entre as permitidas;
+        // qualquer valor fora da lista volta para "todas" (o servidor aplica o escopo).
+        if (
+          restrictedTrafficSourceIds &&
+          next.trafficSourceId &&
+          !restrictedTrafficSourceIds.includes(next.trafficSourceId)
+        ) {
+          return { ...next, trafficSourceId: null }
+        }
+        return next
       })
     },
-    [restrictedTrafficSourceId]
+    [restrictedTrafficSourceId, restrictedTrafficSourceIds]
   )
 
   useEffect(() => {

@@ -23,6 +23,12 @@ interface AuthContextValue {
    * the user isn't restricted. Generalizes the tiktok-only isolation from Story 1.4 to any
    * source. Real enforcement lives server-side in the RPCs — this only drives the UI. */
   restrictedTrafficSourceId: string | null
+  /** Every traffic source this user may see (one entry for `<source>_only`, several for
+   * multi-source roles such as `leo_traffic`), or null if unrestricted. Real enforcement is
+   * server-side (`dashboard_allowed_sources()` in the RPCs). */
+  restrictedTrafficSourceIds: string[] | null
+  /** True for accounts that may only open /roi-campanhas (currently `leo_traffic`). */
+  isRoiOnlyRole: boolean
   /** True when the active session is a CRM account (`dashboard_role === "crm"`, Story 15.1
    * Decision 2), authenticated directly against the app's Supabase (`supabaseCrm`). Drives the
    * sidebar role gate (Story 15.3) — never derived via regex, "crm" has no `_only` suffix. */
@@ -30,10 +36,21 @@ interface AuthContextValue {
   signOut: () => Promise<void>
 }
 
-function deriveRestrictedTrafficSourceId(dashboardRole: string | null): string | null {
+// Roles com mais de uma fonte (devem espelhar public.dashboard_allowed_sources()).
+// "meta_leo" = campanhas Meta do Leo ($3/$5), fonte virtual derivada no servidor.
+const MULTI_SOURCE_ROLES: Record<string, string[]> = {
+  leo_traffic: ["google", "meta_leo"],
+}
+
+// Roles que só podem abrir /roi-campanhas.
+const ROI_ONLY_ROLES = new Set(["leo_traffic"])
+
+function deriveRestrictedTrafficSourceIds(dashboardRole: string | null): string[] | null {
   if (!dashboardRole) return null
+  const multi = MULTI_SOURCE_ROLES[dashboardRole]
+  if (multi) return multi
   const match = dashboardRole.match(/^(.+)_only$/)
-  return match ? match[1] : null
+  return match ? [match[1]] : null
 }
 
 const allowedEmails = (
@@ -87,6 +104,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const email = user?.email?.toLowerCase() ?? null
     const dashboardRole = (user?.app_metadata?.dashboard_role as string | undefined) ?? null
     const isCrmRole = dashboardRole === "crm"
+    const restrictedTrafficSourceIds = deriveRestrictedTrafficSourceIds(dashboardRole)
 
     const isAllowedTeamUser =
       source === "traffic"
@@ -99,7 +117,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       loading,
       isAllowedTeamUser,
       dashboardRole,
-      restrictedTrafficSourceId: deriveRestrictedTrafficSourceId(dashboardRole),
+      restrictedTrafficSourceId:
+        restrictedTrafficSourceIds?.length === 1 ? restrictedTrafficSourceIds[0] : null,
+      restrictedTrafficSourceIds,
+      isRoiOnlyRole: Boolean(dashboardRole && ROI_ONLY_ROLES.has(dashboardRole)),
       isCrmRole,
       signOut: () =>
         (source === "crm" ? supabaseCrm.auth.signOut() : supabase.auth.signOut()).then(

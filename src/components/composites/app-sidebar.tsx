@@ -113,11 +113,13 @@ const items = [
 export function AppSidebar() {
   const location = useLocation()
   const navigate = useNavigate()
-  const { isCrmRole, signOut } = useAuth()
+  const { isCrmRole, isRoiOnlyRole, signOut } = useAuth()
 
-  const visibleItems = items.filter((item) =>
-    isCrmRole ? item.group === "crm" : item.group === "traffic"
-  )
+  const visibleItems = items.filter((item) => {
+    if (isCrmRole) return item.group === "crm"
+    if (isRoiOnlyRole) return item.url === "/roi-campanhas"
+    return item.group === "traffic"
+  })
 
   const handleLogout = async () => {
     await signOut()

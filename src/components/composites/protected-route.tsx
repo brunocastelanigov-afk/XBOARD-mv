@@ -15,7 +15,7 @@ export function ProtectedRoute({
   /** Restricts this route subtree to accounts of the given role group (Story 15.4). */
   group?: "crm" | "traffic"
 }) {
-  const { loading, session, isAllowedTeamUser, isCrmRole } = useAuth()
+  const { loading, session, isAllowedTeamUser, isCrmRole, isRoiOnlyRole } = useAuth()
   const location = useLocation()
 
   if (loading) {
@@ -38,6 +38,10 @@ export function ProtectedRoute({
     const accountGroup: "crm" | "traffic" = isCrmRole ? "crm" : "traffic"
     if (accountGroup !== group) {
       return <Navigate to={GROUP_HOME[accountGroup]} replace />
+    }
+    // Roles "só ROI" (ex.: leo_traffic) só enxergam /roi-campanhas dentro do grupo tráfego.
+    if (group === "traffic" && isRoiOnlyRole && location.pathname !== GROUP_HOME.traffic) {
+      return <Navigate to={GROUP_HOME.traffic} replace />
     }
   }
 
