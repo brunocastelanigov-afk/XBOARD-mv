@@ -20,7 +20,18 @@ import { EntityCard } from "@/components/composites/entity-card"
 import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
 import { EntityListHeader } from "@/components/composites/entity-list-header"
 import { TwoColumnFormLayout } from "@/components/composites/two-column-form-layout"
-import { AdminApiError, adminMutation, adminRpc } from "@/lib/admin-crm-api"
+import { AdminApiError, adminMutation, adminRead, adminRpc } from "@/lib/admin-crm-api"
+import { ExerciseClassificationFields } from "@/components/composites/exercise-classification-fields"
+import {
+  CLASSIFICACAO_VAZIA,
+  GRUPOS_DE_FORCA,
+  camposFaltando,
+  ehGrupoDeForca,
+  mudou,
+  riscosMudaram,
+  type Classificacao,
+} from "@/lib/exercise-classification"
+import type { MatrizDeLesaoResponse, RegiaoDeLesao } from "@/lib/injury-matrix"
 import { cn } from "@/lib/utils"
 
 const ALL_CATEGORIES_LABEL = "Todos"
@@ -106,6 +117,14 @@ interface ExerciseFormState {
   instructions: string
   videoUrl: string
   sexo: SexoApi | null
+  classificacao: Classificacao
+}
+
+/** Classificação do exercício para a IA (Story 19.12) vinda da API, com a origem e se ainda está pendente. */
+interface MetaDoExercicio {
+  classificacao: Classificacao
+  fonte: string | null
+  pendente: boolean
 }
 
 function rowToExercise(row: AdminExerciseRow): Exercise {
@@ -140,7 +159,7 @@ function responseToExercise(row: AdminExerciseResponse): Exercise {
   }
 }
 
-function toFormState(exercise: Exercise | null): ExerciseFormState {
+function toFormState(exercise: Exercise | null, meta?: MetaDoExercicio): ExerciseFormState {
   if (!exercise) {
     return {
       name: "",
@@ -149,9 +168,11 @@ function toFormState(exercise: Exercise | null): ExerciseFormState {
       instructions: "",
       videoUrl: "",
       sexo: null,
+      classificacao: CLASSIFICACAO_VAZIA,
     }
   }
   return {
+    classificacao: meta?.classificacao ?? CLASSIFICACAO_VAZIA,
     name: exercise.name,
     muscleGroup: exercise.muscleGroup,
     equipment: exercise.equipment,
@@ -210,7 +231,14 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
   const [saveState, setSaveState] = useState<SaveState>("idle")
   const [deletingExercise, setDeletingExercise] = useState<Exercise | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
+  const [pendingVideoReplace, setPendingVideoReplace] = useState<{ previous: string; next: string } | null>(null)
   const [inactivationNotice, setInactivationNotice] = useState<string | null>(null)
+  const [playbookMeta, setPlaybookMeta] = useState<Map<string, MetaDoExercicio>>(new Map())
+  const [soPendentes, setSoPendentes] = useState(false)
+  const [fatiasPorGrupo, setFatiasPorGrupo] = useState<Record<string, string[]>>({})
+  const [playbookIndisponivel, setPlaybookIndisponivel] = useState(false)
+  const [playbookCarregado, setPlaybookCarregado] = useState(false)
+  const [playbookEditado, setPlaybookEditado] = useState(false)
 
   const categoryOptions = useMemo(() => [ALL_CATEGORIES_LABEL, ...categories], [categories])
 
@@ -278,6 +306,8 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
   }, [search, activeCategory, sexoFilter])
 
   const isLoading = loading
+  const gruposDisponiveis = Array.from(new Set([...GRUPOS_DE_FORCA, ...categories, ...(form.muscleGroup ? [form.muscleGroup] : [])])).sort((a, b) => a.localeCompare(b, "pt-BR"))
+  const visiveis = soPendentes ? exercises.filter((e) => playbookMeta.get(e.id)?.pendente) : exercises
   const isFiltered = search.trim() !== "" || activeCategory !== ALL_CATEGORIES_LABEL
 
   function matchesCurrentFilters(exercise: Exercise) {
@@ -289,6 +319,52 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
     return matchesSearch && matchesCategory && matchesSexo
   }
 
+  async function carregarMeta() {
+    const dados = await adminRead<MatrizDeLesaoResponse>("/admin/exercises/injury-matrix")
+    setFatiasPorGrupo(dados.fatiasPorGrupo ?? {})
+    setPlaybookMeta(
+      new Map(
+        dados.exercicios.map((e) => [
+          e.exerciseId,
+          {
+            classificacao: {
+              fatias: e.fatias,
+              pesado: e.pesado ?? false,
+              complexo: e.complexo ?? false,
+              queimacao: e.queimacao ?? false,
+              tipo: e.tipo ?? "",
+              dificuldade: e.dificuldade ?? "",
+              regioes: e.regioesTrabalhadas ?? [],
+              riscos: e.riscos as RegiaoDeLesao[],
+            },
+            fonte: e.playbookFonte === "humano" ? "humano" : "proposta",
+            pendente: e.pendente ?? false,
+          },
+        ]),
+      ),
+    )
+    setPlaybookCarregado(true)
+  }
+
+  useEffect(() => {
+    let cancelado = false
+    carregarMeta().catch(() => {
+      if (!cancelado) setPlaybookIndisponivel(true)
+    })
+    return () => {
+      cancelado = true
+    }
+  }, [])
+
+  // Se a pessoa abriu a edição antes dos metadados chegarem, o formulário se atualiza quando eles chegam,
+  // desde que ela ainda não tenha mexido na fatia, no pesado ou no complexo.
+  useEffect(() => {
+    if (!editingId || playbookEditado) return
+    const meta = playbookMeta.get(editingId)
+    if (!meta) return
+    setForm((current) => ({ ...current, classificacao: meta.classificacao }))
+  }, [playbookMeta, editingId, playbookEditado])
+
   function openNewModal() {
     setEditingId(null)
     setForm(toFormState(null))
@@ -298,16 +374,18 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
   }
 
   function openEditModal(exercise: Exercise) {
+    setPlaybookEditado(false)
     setEditingId(exercise.id)
-    setForm(toFormState(exercise))
+    setForm(toFormState(exercise, playbookMeta.get(exercise.id)))
     setFormError(null)
     setSaveState("idle")
     setModalMode("edit")
   }
 
   function openViewModal(exercise: Exercise) {
+    setPlaybookEditado(false)
     setEditingId(exercise.id)
-    setForm(toFormState(exercise))
+    setForm(toFormState(exercise, playbookMeta.get(exercise.id)))
     setFormError(null)
     setModalMode("view")
   }
@@ -347,8 +425,32 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
     }
   }
 
-  async function handleSubmit(event: React.FormEvent) {
+  function handleSubmit(event: React.FormEvent) {
     event.preventDefault()
+    if (saveState !== "idle") return
+    if (!form.muscleGroup.trim()) {
+      setFormError("Escolha o grupo muscular.")
+      return
+    }
+
+    // Trocar um vídeo que já existe exclui o atual (inclusive nos treinos já
+    // gerados das alunas) — exige confirmação explícita antes de salvar.
+    const currentExercise = editingId ? exercises.find((exercise) => exercise.id === editingId) : undefined
+    const nextVideoUrl = form.videoUrl.trim()
+    if (currentExercise?.videoUrl && nextVideoUrl && nextVideoUrl !== currentExercise.videoUrl) {
+      setPendingVideoReplace({ previous: currentExercise.videoUrl, next: nextVideoUrl })
+      return
+    }
+
+    void saveExercise()
+  }
+
+  async function handleConfirmVideoReplace() {
+    setPendingVideoReplace(null)
+    await saveExercise()
+  }
+
+  async function saveExercise() {
     if (saveState !== "idle") return
 
     const payload = {
@@ -375,6 +477,45 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
           })
 
       const nextExercise = responseToExercise(saved)
+      let avisoPlaybook: string | null = null
+      let avisoPendente: string | null = null
+      const criando = !editingId
+      if (!playbookIndisponivel && ehGrupoDeForca(nextExercise.muscleGroup)) {
+        const atual = editingId ? (playbookMeta.get(editingId)?.classificacao ?? CLASSIFICACAO_VAZIA) : CLASSIFICACAO_VAZIA
+        const opcoes = fatiasPorGrupo[nextExercise.muscleGroup] ?? []
+        const c: Classificacao = { ...form.classificacao, fatias: form.classificacao.fatias.filter((f) => opcoes.includes(f)) }
+        const faltando = camposFaltando(c, nextExercise.muscleGroup)
+        const completo = faltando.length === 0
+        // Edição: manda o que mudou. Criação: só manda se a classificação estiver completa; senão o exercício
+        // fica pendente (a IA não o usa) e a pessoa é avisada do que falta.
+        const enviarPlaybook = criando ? completo : mudou(c, atual)
+        const enviarRiscos = criando ? completo : riscosMudaram(c, atual)
+        try {
+          if (enviarPlaybook) {
+            await adminMutation(`/admin/exercises/${saved.exerciseId}/playbook-metadata`, {
+              method: "PUT",
+              body: {
+                fatias: c.fatias,
+                pesado: c.pesado,
+                complexo: c.complexo,
+                queimacao: c.queimacao,
+                ...(c.tipo ? { tipo: c.tipo } : {}),
+                ...(c.dificuldade ? { dificuldade: c.dificuldade } : {}),
+                ...(c.regioes.length > 0 ? { regioesTrabalhadas: c.regioes } : {}),
+              },
+            })
+          }
+          if (enviarRiscos) {
+            await adminMutation(`/admin/exercises/${saved.exerciseId}/injury-risks`, { method: "PUT", body: { riscos: c.riscos } })
+          }
+          if (criando && !completo) {
+            avisoPendente = `"${nextExercise.name}" foi criado como pendente: a IA só vai usá-lo depois de classificado (falta: ${faltando.join(", ")}). Edite o exercício para completar.`
+          }
+        } catch (playbookError) {
+          avisoPlaybook = errorMessage(playbookError)
+        }
+        if (enviarPlaybook || enviarRiscos) await carregarMeta().catch(() => undefined)
+      }
       setExercises((current) => {
         if (editingId) {
           return matchesCurrentFilters(nextExercise)
@@ -383,6 +524,16 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
         }
         return matchesCurrentFilters(nextExercise) ? [nextExercise, ...current] : current
       })
+      if (avisoPlaybook) {
+        // O exercício já existe: a tela passa para a edição dele, para um novo "Salvar" não criar outro igual.
+        setEditingId(saved.exerciseId)
+        setModalMode("edit")
+        setFormError(`Dados básicos salvos, mas a classificação para a IA não foi gravada: ${avisoPlaybook}`)
+        setSaveState("idle")
+        void loadCategories()
+        return
+      }
+      if (avisoPendente) setInactivationNotice(avisoPendente)
       setSaveState("saved")
       void loadCategories()
       window.setTimeout(closeModal, 700)
@@ -444,6 +595,18 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                 ))}
               </SelectContent>
             </Select>
+            {playbookCarregado && (
+              <label className="flex items-center gap-2 whitespace-nowrap text-sm">
+                <input
+                  type="checkbox"
+                  className="size-4"
+                  checked={soPendentes}
+                  onChange={(event) => setSoPendentes(event.target.checked)}
+                  aria-label="Aguardando classificação"
+                />
+                Aguardando classificação
+              </label>
+            )}
           </div>
           {isLoading ? (
             <div className="flex flex-wrap gap-2">
@@ -479,16 +642,16 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
               </div>
             ))}
           </div>
-        ) : exercises.length === 0 ? (
+        ) : visiveis.length === 0 ? (
           <EmptyState
             icon={Dumbbell}
             message={
-              isFiltered ? "Nenhum exercício encontrado." : "Nenhum exercício cadastrado ainda."
+              soPendentes ? "Nenhum exercício aguardando classificação." : isFiltered ? "Nenhum exercício encontrado." : "Nenhum exercício cadastrado ainda."
             }
           />
         ) : (
           <div className="flex flex-col gap-4">
-            {exercises.map((exercise) => {
+            {visiveis.map((exercise) => {
               const tone = categoryTone(exercise.muscleGroup)
               return (
                 <div
@@ -509,6 +672,9 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                               variant: "secondary" as const,
                             },
                           ]
+                        : []),
+                      ...(playbookMeta.get(exercise.id)?.pendente
+                        ? [{ label: "Pendente de classificação", variant: "destructive" as const }]
                         : []),
                       ...(exercise.videoUrl
                         ? [
@@ -636,24 +802,30 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                           }
                         />
                       </label>
-                      <label className="block space-y-2">
+                      <div className="block space-y-2" data-testid="campo-grupo">
                         <span className="text-sm font-medium">
                           Grupo muscular <span className="text-destructive">*</span>
                         </span>
-                        <Input
-                          required
-                          list="exercise-muscle-groups"
-                          value={form.muscleGroup}
-                          onChange={(event) =>
-                            setForm((current) => ({ ...current, muscleGroup: event.target.value }))
+                        {/* Seletor fechado: o grupo decide a classificação para a IA, então não aceita texto livre. */}
+                        <Select
+                          key={form.muscleGroup ? "escolhido" : "vazio"}
+                          value={form.muscleGroup || undefined}
+                          onValueChange={(value) =>
+                            setForm((current) => ({ ...current, muscleGroup: value, classificacao: { ...current.classificacao, fatias: [] } }))
                           }
-                        />
-                        <datalist id="exercise-muscle-groups">
-                          {categories.map((group) => (
-                            <option key={group} value={group} />
-                          ))}
-                        </datalist>
-                      </label>
+                        >
+                          <SelectTrigger aria-label="Grupo muscular">
+                            <SelectValue placeholder="Selecione o grupo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {gruposDisponiveis.map((group) => (
+                              <SelectItem key={group} value={group}>
+                                {group}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                       <label className="block space-y-2">
                         <span className="text-sm font-medium">Sexo</span>
                         <Select
@@ -738,9 +910,50 @@ export function ExerciciosPage({ canEdit: canEditProp }: ExerciciosPageProps) {
                   }
                 />
               </div>
+
+              {playbookIndisponivel ? (
+                <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground" data-testid="secao-playbook">
+                  Metadados do playbook indisponíveis no momento.
+                </p>
+              ) : !playbookCarregado ? (
+                <p className="rounded-lg border border-border p-4 text-sm text-muted-foreground" data-testid="secao-playbook">
+                  Carregando metadados do playbook...
+                </p>
+              ) : (
+                <ExerciseClassificationFields
+                  grupo={form.muscleGroup}
+                  value={form.classificacao}
+                  onChange={(next) => {
+                    setPlaybookEditado(true)
+                    setForm((current) => ({ ...current, classificacao: next }))
+                  }}
+                  fatiasDoGrupo={fatiasPorGrupo[form.muscleGroup.trim()] ?? []}
+                  readOnly={isReadOnly}
+                  fonte={editingId ? ((playbookMeta.get(editingId)?.fonte as "humano" | "proposta" | undefined) ?? null) : null}
+                  pendente={editingId ? (playbookMeta.get(editingId)?.pendente ?? false) : false}
+                />
+              )}
             </fieldset>
           </form>
         </EntityEditModalShell>
+      )}
+
+      {pendingVideoReplace && (
+        <EntityEditModalShell
+          title="Substituir vídeo do exercício"
+          description="Este exercício já tem um vídeo. Ao salvar, o vídeo atual será excluído e substituído pelo novo — inclusive nos treinos já gerados das alunas, exceto onde houver vídeo individual definido. Deseja continuar?"
+          onClose={() => setPendingVideoReplace(null)}
+          footer={
+            <>
+              <Button type="button" variant="outline" onClick={() => setPendingVideoReplace(null)}>
+                Cancelar
+              </Button>
+              <Button type="button" variant="destructive" onClick={handleConfirmVideoReplace}>
+                Excluir vídeo atual e salvar
+              </Button>
+            </>
+          }
+        />
       )}
 
       {deletingExercise && (

@@ -1,4 +1,4 @@
-import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, Users, GraduationCap, MessageSquareText, FlaskConical } from "lucide-react"
+import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, Users, GraduationCap, MessageSquareText, FlaskConical, ShieldAlert } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -70,6 +70,12 @@ const items = [
     title: "Exercícios",
     url: "/crm/exercicios",
     icon: Dumbbell,
+    group: "crm" as const,
+  },
+  {
+    title: "Matriz de lesão",
+    url: "/crm/lesoes",
+    icon: ShieldAlert,
     group: "crm" as const,
   },
   {

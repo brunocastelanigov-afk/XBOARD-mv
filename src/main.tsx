@@ -18,6 +18,7 @@ import { TesteAbPage } from './pages/teste-ab'
 import { LeadDetailPage } from './pages/lead-detail'
 import { UsuariosPage } from './pages/usuarios'
 import { ExerciciosPage } from './pages/exercicios'
+import { LesoesPage } from './pages/lesoes'
 import { ProtocolosPage } from './pages/protocolos'
 import { RegrasPage } from './pages/regras'
 import { LiberarUsuarioPage } from './pages/liberar-usuario'
@@ -102,6 +103,10 @@ const router = createBrowserRouter([
           {
             path: 'crm/exercicios',
             element: <ExerciciosPage />
+          },
+          {
+            path: 'crm/lesoes',
+            element: <LesoesPage />
           },
           {
             path: 'crm/protocolos',
