@@ -63,7 +63,7 @@ test("usuário tiktok_only não vê o seletor de fonte de tráfego", async ({ pa
 
   // Funil/país/variante continuam visíveis; só o seletor de fonte some.
   await expect(page.getByText("Funil").first()).toBeVisible().catch(() => {})
-  await expect(page.getByRole("combobox")).toHaveCount(3) // funil, país, variante — sem o de fonte
+  await expect(page.getByRole("combobox")).toHaveCount(4) // funil, país, variante, produto — sem o de fonte
 
   await page.screenshot({ path: "docs/screenshots/campaign-roi-tiktok-role-no-source-filter.png", fullPage: true })
 })
@@ -141,5 +141,5 @@ test("usuário sem dashboard_role continua vendo o seletor de fonte normalmente 
   )
 
   await page.goto("/roi-campanhas")
-  await expect(page.getByRole("combobox")).toHaveCount(4) // funil, país, variante, fonte
+  await expect(page.getByRole("combobox")).toHaveCount(5) // funil, país, variante, produto, fonte
 })

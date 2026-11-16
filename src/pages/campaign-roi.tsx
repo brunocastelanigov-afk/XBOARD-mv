@@ -23,6 +23,7 @@ const trafficSourceLabels: Record<string, string> = {
   google: "Google",
   organic: "Orgânico",
   unknown: "Outras fontes",
+  meta_leo: "Meta — Leo ($3/$5)",
 }
 
 function getTrafficSourceId(row: CampaignRoiRow) {

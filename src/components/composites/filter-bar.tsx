@@ -38,6 +38,7 @@ const trafficSourceLabels: Record<string, string> = {
   google: "Google",
   organic: "Orgânico",
   unknown: "Desconhecida",
+  meta_leo: "Meta — Leo ($3/$5)",
 }
 
 function labelTrafficSource(value: string) {
@@ -56,7 +57,7 @@ export function FilterBar({
   isRefetching = false,
 }: FilterBarProps) {
   const { filters, options, setFilters } = useDashboardFilters()
-  const { restrictedTrafficSourceId } = useAuth()
+  const { restrictedTrafficSourceId, restrictedTrafficSourceIds } = useAuth()
   const funnelOptions = Array.from(new Set(options.map((option) => option.funnel_id)))
 
   useEffect(() => {
@@ -80,7 +81,7 @@ export function FilterBar({
         .map((option) => option.funnel_variant ?? nullValue)
     )
   )
-  const trafficSourceOptions = Array.from(
+  const optionSources = Array.from(
     new Set(
       options
         .filter((option) => !filters.funnelId || option.funnel_id === filters.funnelId)
@@ -88,7 +89,15 @@ export function FilterBar({
         .filter((option) => !filters.funnelVariant || option.funnel_variant === filters.funnelVariant)
         .map((option) => option.traffic_source_id ?? "unknown")
     )
-  ).sort((a, b) => labelTrafficSource(a).localeCompare(labelTrafficSource(b)))
+  )
+  // "meta_leo" é uma fonte virtual (campanhas Meta $3/$5) que não existe na MV de opções:
+  // aparece sempre que há Meta; para roles multi-fonte (Leo) a lista é a do próprio role.
+  const trafficSourceOptions = (
+    restrictedTrafficSourceIds ??
+    (optionSources.includes("facebook") ? [...optionSources, "meta_leo"] : optionSources)
+  )
+    .slice()
+    .sort((a, b) => labelTrafficSource(a).localeCompare(labelTrafficSource(b)))
 
   useEffect(() => {
     if (
