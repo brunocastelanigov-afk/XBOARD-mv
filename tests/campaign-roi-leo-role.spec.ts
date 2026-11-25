@@ -95,7 +95,7 @@ test("Leo só acessa /roi-campanhas: sidebar com 1 item e URLs de outras página
   await expect(page.getByRole("link", { name: "Respostas" })).toHaveCount(0)
   await expect(page.getByRole("link", { name: "Performance Geral" })).toHaveCount(0)
 
-  for (const path of ["/performance", "/respostas", "/auditoria", "/teste-ab"]) {
+  for (const path of ["/performance", "/respostas", "/auditoria", "/teste-ab", "/funil-one-click"]) {
     await page.goto(path)
     await expect(page).toHaveURL(/\/roi-campanhas$/)
   }

@@ -1,4 +1,4 @@
-import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, Users, GraduationCap, MessageSquareText, FlaskConical, ShieldAlert } from "lucide-react"
+import { MessageSquare, BarChart2, Activity, ShieldCheck, DollarSign, LogOut, ListChecks, Settings, UserPlus, Dumbbell, ClipboardList, Users, GraduationCap, MessageSquareText, FlaskConical, ShieldAlert, Zap } from "lucide-react"
 import { useLocation, Link, useNavigate } from "react-router-dom"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -28,6 +28,12 @@ const items = [
     title: "Teste A/B",
     url: "/teste-ab",
     icon: FlaskConical,
+    group: "traffic" as const,
+  },
+  {
+    title: "Funil One-click",
+    url: "/funil-one-click",
+    icon: Zap,
     group: "traffic" as const,
   },
   {

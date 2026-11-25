@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase"
 import type {
+  OcFunnelConfigRow,
+  OcFunnelSummaryRow,
   AuditStatusFilters,
   AbTestConfigRow,
   AbTestSummaryRow,
@@ -153,6 +155,33 @@ export async function fetchUpsell2AbTestSummary(filters: DashboardFilters, signa
     }),
     signal
   )
+}
+
+export async function fetchOcFunnelConfig(signal?: AbortSignal) {
+  return readRows<OcFunnelConfigRow>(supabase.rpc("rpc_oc_funnel_config"), signal)
+}
+
+export async function fetchOcFunnelSummary(filters: DashboardFilters, signal?: AbortSignal) {
+  return readRows<OcFunnelSummaryRow>(
+    supabase.rpc("rpc_oc_funnel_summary", {
+      p_from: filters.dateFrom,
+      p_to: filters.dateTo,
+    }),
+    signal
+  )
+}
+
+// Percentual do braço one-click (0 = todo mundo no padrão). Só `dashboard_admin` consegue
+// gravar (RLS); sem permissão o update não afeta nenhuma linha e avisamos em vez de fingir sucesso.
+export async function updateOcFunnelPercent(percent: number) {
+  const { data, error } = await supabase
+    .from("oc_funnel_config")
+    .update({ one_click_percent: percent, updated_at: new Date().toISOString() })
+    .eq("test_key", "oc-one-click")
+    .select("test_key")
+
+  if (error) throw error
+  if (!data?.length) throw new Error("Sem permissão para alterar o split (requer dashboard_admin).")
 }
 
 export async function fetchWebinarProductsForCampaign(

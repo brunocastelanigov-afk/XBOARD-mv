@@ -15,6 +15,7 @@ import { PerformancePage } from './pages/performance'
 import { AuditoriaPage } from './pages/auditoria'
 import { CampaignRoiPage } from './pages/campaign-roi'
 import { TesteAbPage } from './pages/teste-ab'
+import { FunilOneClickPage } from './pages/funil-one-click'
 import { LeadDetailPage } from './pages/lead-detail'
 import { UsuariosPage } from './pages/usuarios'
 import { ExerciciosPage } from './pages/exercicios'
@@ -70,6 +71,10 @@ const router = createBrowserRouter([
           {
             path: 'teste-ab',
             element: <TesteAbPage />
+          },
+          {
+            path: 'funil-one-click',
+            element: <FunilOneClickPage />
           },
           {
             path: 'lead/:id',
