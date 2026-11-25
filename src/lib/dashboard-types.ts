@@ -275,6 +275,30 @@ export interface AbTestSummaryRow {
   conversion_rate: number
 }
 
+export interface OcFunnelConfigRow {
+  is_active: boolean
+  one_click_percent: number
+  active_from: string
+}
+
+export type OcFunnelArm = "padrao" | "one_click" | "sem_token"
+export type OcFunnelProduct = "trinca" | "pink"
+
+export interface OcFunnelSummaryRow {
+  arm: OcFunnelArm
+  product: OcFunnelProduct
+  obrigado_views: number
+  upsell_views: number
+  upsell_clicks: number
+  downsell_views: number
+  downsell_clicks: number
+  liberando_views: number
+  upsell_purchases: number
+  upsell_revenue_cents: number
+  downsell_purchases: number
+  downsell_revenue_cents: number
+}
+
 export interface WebinarProductRow {
   product_code: string
   product_name: string
