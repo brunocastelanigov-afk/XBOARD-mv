@@ -3,6 +3,7 @@ import { Dumbbell, FileStack } from "lucide-react"
 import { Badge } from "@/components/atoms/badge"
 import { EmptyState } from "@/components/atoms/empty-state"
 import { SearchInput } from "@/components/atoms/search-input"
+import { findCurrentTemplate } from "@/lib/current-template"
 import { cn } from "@/lib/utils"
 import { useState } from "react"
 
@@ -13,6 +14,7 @@ export interface ProtocolEditorTemplateOption {
   objetivo: string
   categoria: string | null
   sexo?: string | null
+  signature: string
 }
 
 interface ChoiceCardProps {
@@ -85,6 +87,8 @@ export function ProtocolEditorChoiceCards({
 export interface ProtocolTemplatePickerProps {
   templates: ProtocolEditorTemplateOption[]
   currentTemplateNome?: string | null
+  /** Assinatura dos exercícios do programa atual; null enquanto carrega ou se falhar. */
+  currentSignature: string | null
   saving: boolean
   error: string | null
   onSelect: (templateId: string) => void
@@ -121,6 +125,7 @@ function sexoLabel(value: string | null | undefined) {
 export function ProtocolTemplatePicker({
   templates,
   currentTemplateNome,
+  currentSignature,
   saving,
   error,
   onSelect,
@@ -128,7 +133,7 @@ export function ProtocolTemplatePicker({
   const [query, setQuery] = useState("")
 
   const currentTemplate = currentTemplateNome
-    ? templates.find((template) => template.nome === currentTemplateNome)
+    ? findCurrentTemplate(templates, currentTemplateNome, currentSignature)
     : undefined
 
   const normalizedQuery = query.trim().toLowerCase()
@@ -143,12 +148,18 @@ export function ProtocolTemplatePicker({
           <span>
             Protocolo atual: <span className="font-medium text-foreground">{currentTemplateNome}</span>
           </span>
-          <Badge variant="outline">{categoriaLabel(currentTemplate?.categoria)}</Badge>
-          {currentTemplate?.nivel && (
-            <Badge variant="outline">{nivelLabel(currentTemplate.nivel)}</Badge>
-          )}
-          {currentTemplate?.sexo && (
-            <Badge variant="outline">{sexoLabel(currentTemplate.sexo)}</Badge>
+          {currentTemplate ? (
+            <>
+              <Badge variant="outline">{categoriaLabel(currentTemplate.categoria)}</Badge>
+              {currentTemplate.nivel && (
+                <Badge variant="outline">{nivelLabel(currentTemplate.nivel)}</Badge>
+              )}
+              {currentTemplate.sexo && (
+                <Badge variant="outline">{sexoLabel(currentTemplate.sexo)}</Badge>
+              )}
+            </>
+          ) : (
+            <Badge variant="outline">Modelo não identificado</Badge>
           )}
         </div>
       )}

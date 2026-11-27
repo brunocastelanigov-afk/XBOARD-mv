@@ -31,6 +31,7 @@ import { EntityCard } from "@/components/composites/entity-card"
 import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-shell"
 import { ProgramExerciseEditor } from "@/components/composites/program-exercise-editor"
 import { ProtocolTemplatePicker, type ProtocolEditorTemplateOption } from "@/components/composites/protocol-editor"
+import { programSignature, templateSignature } from "@/lib/current-template"
 import { useProgramExerciseEditor } from "@/hooks/use-program-exercise-editor"
 import { adminMutation, adminRpc } from "@/lib/admin-api"
 import {
@@ -245,6 +246,7 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
   // openTreinoIndividualModal em src/pages/protocolos.tsx.
   const [protocolTemplates, setProtocolTemplates] = React.useState<ProtocolEditorTemplateOption[] | null>(null)
   const [currentProtocolNome, setCurrentProtocolNome] = React.useState<string | null>(null)
+  const [currentProtocolSignature, setCurrentProtocolSignature] = React.useState<string | null>(null)
   const [protocolLoadError, setProtocolLoadError] = React.useState<string | null>(null)
   const [protocolAssignState, setProtocolAssignState] = React.useState<"idle" | "saving" | "saved">("idle")
   const [protocolAssignError, setProtocolAssignError] = React.useState<string | null>(null)
@@ -254,11 +256,11 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
     setProtocolLoadError(null)
     try {
       const [templateRows, detailRows] = await Promise.all([
-        adminRpc<{ template_id: string; nome: string; nivel: string; objetivo: string; categoria: string | null; sexo?: string | null; status: string }[]>(
+        adminRpc<{ template_id: string; nome: string; nivel: string; objetivo: string; categoria: string | null; sexo?: string | null; status: string; days: Parameters<typeof templateSignature>[0] }[]>(
           "admin_protocol_templates_tree",
           { p_status: "ativo", p_nivel: null, p_objetivo: null }
         ),
-        adminRpc<{ program_nome: string | null }[]>("admin_user_program_detail", { p_user_id: user.id }),
+        adminRpc<{ program_nome: string | null; days: Parameters<typeof programSignature>[0] | null }[]>("admin_user_program_detail", { p_user_id: user.id }),
       ])
       setProtocolTemplates(
         templateRows.map((row) => ({
@@ -268,9 +270,11 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
           objetivo: row.objetivo,
           categoria: row.categoria,
           sexo: row.sexo,
+          signature: templateSignature(row.days),
         }))
       )
       setCurrentProtocolNome(detailRows[0]?.program_nome ?? null)
+      setCurrentProtocolSignature(programSignature(detailRows[0]?.days ?? []))
     } catch (loadError) {
       setProtocolLoadError(errorMessage(loadError))
     }
@@ -672,6 +676,7 @@ export function UserDetailModal({ user, canEdit = true, onClose }: UserDetailMod
               <ProtocolTemplatePicker
                 templates={protocolTemplates}
                 currentTemplateNome={currentProtocolNome}
+                currentSignature={currentProtocolSignature}
                 saving={protocolAssignState === "saving"}
                 error={protocolAssignError}
                 onSelect={(templateId) => void handleAssignProtocolTemplate(templateId)}
