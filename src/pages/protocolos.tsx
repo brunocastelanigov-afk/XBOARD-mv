@@ -41,6 +41,7 @@ import { EntityEditModalShell } from "@/components/composites/entity-edit-modal-
 import { EntityListHeader } from "@/components/composites/entity-list-header"
 import { LinkedEntitySearchList, type LinkedEntitySearchItem } from "@/components/composites/linked-entity-search-list"
 import { ProtocolEditorChoiceCards, ProtocolTemplatePicker } from "@/components/composites/protocol-editor"
+import { programSignature, templateSignature } from "@/lib/current-template"
 import { ReorderableListItem } from "@/components/composites/reorderable-list-item"
 import { StatTile } from "@/components/composites/stat-tile"
 import { WizardTabs } from "@/components/composites/wizard-tabs"
@@ -440,6 +441,7 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
   const [deletingTemplate, setDeletingTemplate] = useState<TemplateRow | null>(null)
   const [modalMode, setModalMode] = useState<"create" | "edit" | "program" | "choice" | "assign" | null>(null)
   const [choiceStudent, setChoiceStudent] = useState<UserProgramRow | null>(null)
+  const [choiceSignature, setChoiceSignature] = useState<{ programId: string; value: string } | null>(null)
   const [assignSaveState, setAssignSaveState] = useState<"idle" | "saving" | "saved">("idle")
   const [assignError, setAssignError] = useState<string | null>(null)
   const [protocolFormState, setProtocolFormState] = useState<ProtocolForm | null>(null)
@@ -723,6 +725,21 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
     setAssignError(null)
     setAssignSaveState("idle")
     setModalMode("assign")
+    if (choiceStudent) void loadChoiceSignature(choiceStudent.user_id)
+  }
+
+  // Só alimenta a etiqueta "Protocolo atual"; guardada por programId para nunca
+  // valer para outro aluno. Se falhar, a etiqueta fica "Modelo não identificado".
+  async function loadChoiceSignature(userId: string) {
+    try {
+      const rows = await adminRpc<ProgramDetailRow[]>("admin_user_program_detail", { p_user_id: userId })
+      const detail = rows[0]
+      if (detail?.program_id) {
+        setChoiceSignature({ programId: detail.program_id, value: programSignature(detail.days) })
+      }
+    } catch (signatureError) {
+      console.error("Falha ao identificar o modelo do protocolo atual:", signatureError)
+    }
   }
 
   // Problema 01: migração manual de protocolo — troca qual template o
@@ -1760,8 +1777,12 @@ export function ProtocolosPage({ canEdit: canEditProp }: ProtocolosPageProps) {
               objetivo: template.objetivo,
               categoria: template.categoria,
               sexo: template.sexo,
+              signature: templateSignature(template.days),
             }))}
             currentTemplateNome={choiceStudent.program_nome}
+            currentSignature={
+              choiceSignature?.programId === choiceStudent.program_id ? choiceSignature.value : null
+            }
             saving={assignSaveState !== "idle"}
             error={assignError}
             onSelect={(templateId) => void handleAssignTemplate(templateId)}
